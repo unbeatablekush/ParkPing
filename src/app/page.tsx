@@ -247,7 +247,7 @@ export default function LandingPage() {
               </Card>
 
               {/* Sub Card */}
-              <Card className="border-2 border-primary relative shadow-xl transform md:-translate-y-4 flex flex-col">
+              <Card className="border-2 border-primary relative shadow-xl transform md:-translate-y-4 flex flex-col overflow-visible">
                 <div className="absolute top-0 left-1/2 -translate-x-1/2 -translate-y-1/2 bg-primary text-white px-4 py-1 rounded-full text-sm font-bold uppercase tracking-wider">
                   Recommended
                 </div>
