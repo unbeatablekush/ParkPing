@@ -3,12 +3,13 @@
 import { cn } from "@/lib/utils";
 import { motion, HTMLMotionProps } from "framer-motion";
 import { Loader2 } from "lucide-react";
-import { forwardRef } from "react";
+import { forwardRef, ReactNode } from "react";
 
-export interface ButtonProps extends HTMLMotionProps<"button"> {
+export interface ButtonProps extends Omit<HTMLMotionProps<"button">, "children"> {
   variant?: "primary" | "secondary" | "outline" | "ghost" | "danger" | "success";
   size?: "sm" | "md" | "lg" | "icon";
   isLoading?: boolean;
+  children?: ReactNode;
 }
 
 const Button = forwardRef<HTMLButtonElement, ButtonProps>(
