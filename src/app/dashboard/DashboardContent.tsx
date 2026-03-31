@@ -1,10 +1,10 @@
 "use client";
 
-import { motion } from "framer-motion";
+
 import { MOCK_STATS, MOCK_USER, MOCK_VEHICLES, MOCK_SCAN_HISTORY } from "@/lib/mock-data";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/Card";
 import { Button } from "@/components/ui/Button";
-import { MapPin, Phone, BellRing, Settings, Plus, QrCode } from "lucide-react";
+import { MapPin, Phone, BellRing, Plus, QrCode } from "lucide-react";
 import Link from "next/link";
 import { cn } from "@/lib/utils";
 
@@ -19,7 +19,7 @@ export default function DashboardContent({ tab }: DashboardContentProps) {
     <div className="space-y-8 animate-in fade-in duration-500">
       <div>
         <h1 className="text-3xl font-bold text-secondary mb-2">Hello, {MOCK_USER.name} 👋</h1>
-        <p className="text-gray-500">Here's what is happening with your registered vehicles.</p>
+        <p className="text-gray-500">Here&apos;s what is happening with your registered vehicles.</p>
       </div>
 
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">

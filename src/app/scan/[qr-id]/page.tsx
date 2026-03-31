@@ -96,7 +96,7 @@ export default function ScanPage({ params }: { params: { "qr-id": string } }) {
               <AnimatePresence mode="wait">
                 {step === "verify" && (
                   <motion.div key="verify" initial={{ opacity: 0, x: -20 }} animate={{ opacity: 1, x: 0 }} exit={{ opacity: 0, x: -20 }}>
-                     <h3 className="text-lg font-bold text-gray-900 mb-2">Verify it's you</h3>
+                     <h3 className="text-lg font-bold text-gray-900 mb-2">Verify it&apos;s you</h3>
                      <p className="text-sm text-gray-500 mb-6 pb-4 border-b border-gray-100">
                         To prevent spam, please verify your mobile number. The owner will <strong>NOT</strong> see your number.
                      </p>

@@ -4,7 +4,7 @@ import { cookies } from "next/headers";
 export async function POST(req: Request) {
   try {
     const body = await req.json();
-    const { phone, otp } = body;
+    const { otp } = body;
 
     // Simulate OTP verification and login
     if (otp.length === 6) {
@@ -22,7 +22,7 @@ export async function POST(req: Request) {
     }
 
     return NextResponse.json({ success: false, error: "Invalid OTP" }, { status: 400 });
-  } catch (error) {
+  } catch {
     return NextResponse.json({ success: false, error: "Server Error" }, { status: 500 });
   }
 }

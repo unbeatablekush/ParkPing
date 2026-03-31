@@ -2,7 +2,7 @@
 
 import { motion } from "framer-motion";
 import Link from "next/link";
-import { ArrowRight, Phone, BellRing, Navigation, ShieldCheck, Clock, MapPin, CheckCircle, Star } from "lucide-react";
+import { ArrowRight, Phone, BellRing, ShieldCheck, Clock, MapPin, CheckCircle, Star } from "lucide-react";
 import { Button } from "@/components/ui/Button";
 import { Card, CardContent } from "@/components/ui/Card";
 import { Navbar } from "@/components/layout/Navbar";
@@ -63,6 +63,7 @@ export default function LandingPage() {
                   <div className="flex -space-x-2">
                     {[1, 2, 3, 4].map((i) => (
                       <div key={i} className="w-8 h-8 rounded-full border-2 border-white bg-gray-200 flex items-center justify-center overflow-hidden">
+                        {/* eslint-disable-next-line @next/next/no-img-element */}
                         <img src={`https://i.pravatar.cc/100?img=${i + 10}`} alt="User avatar" />
                       </div>
                     ))}
@@ -113,7 +114,7 @@ export default function LandingPage() {
               initial="hidden" whileInView="visible" viewport={{ once: true }} variants={stagger}
               className="text-center mb-16"
             >
-              <h2 className="text-3xl md:text-5xl font-bold text-secondary mb-4">We've all been there.</h2>
+              <h2 className="text-3xl md:text-5xl font-bold text-secondary mb-4">We&apos;ve all been there.</h2>
               <p className="text-lg text-gray-500 max-w-2xl mx-auto">Parking in India is tough. Getting your car blocked is worse.</p>
             </motion.div>
 
@@ -299,9 +300,10 @@ export default function LandingPage() {
                     <div className="flex gap-1 mb-4 text-[#FFB800]">
                       <Star className="fill-current w-5 h-5"/><Star className="fill-current w-5 h-5"/><Star className="fill-current w-5 h-5"/><Star className="fill-current w-5 h-5"/><Star className="fill-current w-5 h-5"/>
                     </div>
-                    <p className="text-gray-600 mb-6 font-medium italic">"{t.text}"</p>
+                    <p className="text-gray-600 mb-6 font-medium italic">&quot;{t.text}&quot;</p>
                     <div className="flex items-center gap-4">
                       <div className="w-12 h-12 bg-gray-200 rounded-full overflow-hidden">
+                        {/* eslint-disable-next-line @next/next/no-img-element */}
                         <img src={`https://i.pravatar.cc/150?img=${i * 10 + 12}`} alt={t.name} />
                       </div>
                       <div>

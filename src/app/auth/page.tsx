@@ -3,7 +3,7 @@
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { motion, AnimatePresence } from "framer-motion";
-import { ArrowLeft, ShieldCheck, MapPin } from "lucide-react";
+import { ArrowLeft, ShieldCheck } from "lucide-react";
 import { Card, CardContent } from "@/components/ui/Card";
 import { Button } from "@/components/ui/Button";
 import { OTPInput } from "@/components/ui/OTPInput";
@@ -132,7 +132,7 @@ export default function AuthPage() {
                   <div className="mb-8">
                     <h2 className="text-3xl font-bold text-secondary tracking-tight">Verify Device</h2>
                     <p className="mt-2 text-sm text-gray-500">
-                      We've sent a 6-digit code to <span className="font-semibold text-gray-900">+91 {phone}</span>
+                      We&apos;ve sent a 6-digit code to <span className="font-semibold text-gray-900">+91 {phone}</span>
                     </p>
                   </div>
 

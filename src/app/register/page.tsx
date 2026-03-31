@@ -69,7 +69,7 @@ export default function RegisterVehiclePage() {
             <Car className="w-8 h-8" />
           </div>
           <h1 className="text-3xl font-extrabold text-secondary tracking-tight">Register Your Vehicle</h1>
-          <p className="mt-2 text-gray-500 max-w-lg mx-auto">Link your car's details securely to your verified phone number.</p>
+          <p className="mt-2 text-gray-500 max-w-lg mx-auto">Link your car&apos;s details securely to your verified phone number.</p>
         </div>
 
         <Card className="shadow-lg border-0 overflow-hidden">

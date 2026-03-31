@@ -1,0 +1,62 @@
+[
+  {
+    "file": "D:\\ParkPing\\src\\app\\api\\auth\\verify-otp\\route.ts",
+    "messages": [
+      "[7:13] @typescript-eslint/no-unused-vars: 'phone' is assigned a value but never used.",
+      "[25:12] @typescript-eslint/no-unused-vars: 'error' is defined but never used."
+    ]
+  },
+  {
+    "file": "D:\\ParkPing\\src\\app\\auth\\page.tsx",
+    "messages": [
+      "[6:34] @typescript-eslint/no-unused-vars: 'MapPin' is defined but never used.",
+      "[135:25] react/no-unescaped-entities: `'` can be escaped with `&apos;`, `&lsquo;`, `&#39;`, `&rsquo;`."
+    ]
+  },
+  {
+    "file": "D:\\ParkPing\\src\\app\\dashboard\\DashboardContent.tsx",
+    "messages": [
+      "[3:10] @typescript-eslint/no-unused-vars: 'motion' is defined but never used.",
+      "[7:35] @typescript-eslint/no-unused-vars: 'Settings' is defined but never used.",
+      "[22:42] react/no-unescaped-entities: `'` can be escaped with `&apos;`, `&lsquo;`, `&#39;`, `&rsquo;`."
+    ]
+  },
+  {
+    "file": "D:\\ParkPing\\src\\app\\dashboard\\layout.tsx",
+    "messages": [
+      "[19:9] @typescript-eslint/no-unused-vars: 'pathname' is assigned a value but never used."
+    ]
+  },
+  {
+    "file": "D:\\ParkPing\\src\\app\\page.tsx",
+    "messages": [
+      "[5:39] @typescript-eslint/no-unused-vars: 'Navigation' is defined but never used.",
+      "[66:25] @next/next/no-img-element: Using `<img>` could result in slower LCP and higher bandwidth. Consider using `<Image />` from `next/image` to automatically optimize images. This may incur additional usage or cost from your provider. See: https://nextjs.org/docs/messages/no-img-element",
+      "[116:84] react/no-unescaped-entities: `'` can be escaped with `&apos;`, `&lsquo;`, `&#39;`, `&rsquo;`.",
+      "[302:74] react/no-unescaped-entities: `\"` can be escaped with `&quot;`, `&ldquo;`, `&#34;`, `&rdquo;`.",
+      "[302:83] react/no-unescaped-entities: `\"` can be escaped with `&quot;`, `&ldquo;`, `&#34;`, `&rdquo;`.",
+      "[305:25] @next/next/no-img-element: Using `<img>` could result in slower LCP and higher bandwidth. Consider using `<Image />` from `next/image` to automatically optimize images. This may incur additional usage or cost from your provider. See: https://nextjs.org/docs/messages/no-img-element"
+    ]
+  },
+  {
+    "file": "D:\\ParkPing\\src\\app\\register\\page.tsx",
+    "messages": [
+      "[72:75] react/no-unescaped-entities: `'` can be escaped with `&apos;`, `&lsquo;`, `&#39;`, `&rsquo;`."
+    ]
+  },
+  {
+    "file": "D:\\ParkPing\\src\\app\\scan\\[qr-id]\\page.tsx",
+    "messages": [
+      "[99:84] react/no-unescaped-entities: `'` can be escaped with `&apos;`, `&lsquo;`, `&#39;`, `&rsquo;`."
+    ]
+  },
+  {
+    "file": "D:\\ParkPing\\src\\app\\scan\\[qr-id]\\waiting\\page.tsx",
+    "messages": [
+      "[9:39] @typescript-eslint/no-unused-vars: 'params' is defined but never used.",
+      "[40:67] react/no-unescaped-entities: `'` can be escaped with `&apos;`, `&lsquo;`, `&#39;`, `&rsquo;`.",
+      "[51:73] react/no-unescaped-entities: `'` can be escaped with `&apos;`, `&lsquo;`, `&#39;`, `&rsquo;`.",
+      "[70:73] react/no-unescaped-entities: `'` can be escaped with `&apos;`, `&lsquo;`, `&#39;`, `&rsquo;`."
+    ]
+  }
+]

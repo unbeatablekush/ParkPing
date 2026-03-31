@@ -2,7 +2,6 @@
 
 import { useState } from "react";
 import Link from "next/link";
-import { usePathname } from "next/navigation";
 import { LayoutDashboard, CarFront, History, Settings, Menu, X, LogOut } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
 import { MOCK_USER } from "@/lib/mock-data";
@@ -16,7 +15,6 @@ const navItems = [
 
 export default function DashboardLayout({ children }: { children: React.ReactNode }) {
   const [sidebarOpen, setSidebarOpen] = useState(false);
-  const pathname = usePathname();
 
   return (
     <div className="min-h-screen bg-gray-50 flex">

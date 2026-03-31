@@ -6,7 +6,7 @@ import { SonarPing } from "@/components/ui/SonarPing";
 import { Button } from "@/components/ui/Button";
 import { X, CheckCircle2, Phone } from "lucide-react";
 
-export default function WaitingPage({ params }: { params: { "qr-id": string } }) {
+export default function WaitingPage() {
   const router = useRouter();
   const [status, setStatus] = useState<"waiting" | "coming" | "expired">("waiting");
   const [eta, setEta] = useState<number | null>(null);
@@ -37,7 +37,7 @@ export default function WaitingPage({ params }: { params: { "qr-id": string } })
           {status === "waiting" && (
             <div className="animate-in fade-in duration-500 flex flex-col items-center">
               <h2 className="text-2xl font-bold text-secondary mb-2">Alert Sent!</h2>
-              <p className="text-gray-500 font-medium max-w-xs">We've notified the owner via a high-priority push notification.</p>
+              <p className="text-gray-500 font-medium max-w-xs">We&apos;ve notified the owner via a high-priority push notification.</p>
               <SonarPing />
               <p className="text-sm font-semibold text-primary animate-pulse mt-4">Waiting for their response...</p>
             </div>
@@ -48,7 +48,7 @@ export default function WaitingPage({ params }: { params: { "qr-id": string } })
               <div className="w-24 h-24 bg-success/10 rounded-full flex items-center justify-center mb-6">
                 <CheckCircle2 className="w-12 h-12 text-success" />
               </div>
-              <h2 className="text-3xl font-bold text-gray-900 mb-2">They're coming!</h2>
+              <h2 className="text-3xl font-bold text-gray-900 mb-2">They&apos;re coming!</h2>
               <p className="text-gray-500 text-lg mb-8">The owner has seen your alert and is on their way.</p>
               
               {eta && (
@@ -67,7 +67,7 @@ export default function WaitingPage({ params }: { params: { "qr-id": string } })
           {status === "expired" && (
             <div className="animate-in fade-in flex flex-col items-center">
                <h2 className="text-2xl font-bold text-red-600 mb-2">No Response</h2>
-               <p className="text-gray-500 mb-8 max-w-xs">The owner hasn't responded to the app alert within 5 minutes.</p>
+               <p className="text-gray-500 mb-8 max-w-xs">The owner hasn&apos;t responded to the app alert within 5 minutes.</p>
                <Button className="w-full h-14 bg-red-500 hover:bg-red-600 border-none text-white shadow-lg">
                  <Phone className="mr-2 w-5 h-5" /> Escalate & Call Owner
                </Button>
