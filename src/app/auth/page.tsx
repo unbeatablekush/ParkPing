@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { motion, AnimatePresence } from "framer-motion";
 import { ArrowLeft } from "lucide-react";
@@ -9,66 +9,40 @@ import { Button } from "@/components/ui/Button";
 import { OTPInput } from "@/components/ui/OTPInput";
 import { formatPhone } from "@/lib/utils";
 import { useToast } from "@/components/ui/ToastProvider";
-import { auth } from "@/lib/firebase";
-import { RecaptchaVerifier, signInWithPhoneNumber, ConfirmationResult } from "firebase/auth";
-
-declare global {
-  interface Window {
-    recaptchaVerifier: RecaptchaVerifier | undefined;
-    confirmationResult: ConfirmationResult | undefined;
-  }
-}
+import { supabaseClient } from "@/lib/supabase-client";
 
 export default function AuthPage() {
   const [step, setStep] = useState<"phone" | "otp">("phone");
+  const [email, setEmail] = useState("");
   const [phone, setPhone] = useState("");
   const [otp, setOtp] = useState("");
   const [loading, setLoading] = useState(false);
   const router = useRouter();
   const toast = useToast();
 
-  useEffect(() => {
-    // Clear dead instances (fixes 'reCAPTCHA client element has been removed' error on hot reloads)
-    try {
-      if (window.recaptchaVerifier) {
-        window.recaptchaVerifier.clear();
-        window.recaptchaVerifier = undefined;
-      }
-    } catch(e) {}
-
-    window.recaptchaVerifier = new RecaptchaVerifier(
-      auth, 
-      'recaptcha-container', 
-      { size: 'invisible' }
-    );
-
-    return () => {
-      try {
-        if (window.recaptchaVerifier) {
-          window.recaptchaVerifier.clear();
-          window.recaptchaVerifier = undefined;
-        }
-      } catch(e) {}
-    };
-  }, []);
-
   const handleSendOTP = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (phone.length < 10) {
+    if (!email.includes("@")) {
+      toast("Please enter a valid email address", "error");
+      return;
+    }
+    if (phone.length > 0 && phone.length < 10) {
       toast("Please enter a valid 10-digit number", "error");
       return;
     }
     
     setLoading(true);
     try {
-      const formattedPhone = `+91${phone}`;
-      const confirmation = await signInWithPhoneNumber(auth, formattedPhone, window.recaptchaVerifier);
-      window.confirmationResult = confirmation;
+      const { error } = await supabaseClient.auth.signInWithOtp({
+        email: email,
+      });
+
+      if (error) throw error;
       
       setStep("otp");
-      toast("OTP sent to your number!", "success");
+      toast("OTP sent to your email!", "success");
     } catch (error) {
-      console.error("Firebase SMS error:", error);
+      console.error("Supabase Email error:", error);
       toast("Failed to send OTP. Please try again.", "error");
     } finally {
       setLoading(false);
@@ -84,17 +58,18 @@ export default function AuthPage() {
     
     setLoading(true);
     try {
-      if (!window.confirmationResult) {
-        throw new Error("Missing confirmation payload");
-      }
-      
-      const result = await window.confirmationResult.confirm(otp);
-      const idToken = await result.user.getIdToken();
+      const { error } = await supabaseClient.auth.verifyOtp({
+        email,
+        token: otp,
+        type: 'email'
+      });
+
+      if (error) throw error;
       
       const res = await fetch('/api/auth/verify-otp', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ token: idToken, phone })
+        body: JSON.stringify({ email, phone })
       });
 
       if (!res.ok) {
@@ -113,7 +88,6 @@ export default function AuthPage() {
 
   return (
     <div className="min-h-screen bg-gray-50 flex flex-col justify-center py-12 px-4 sm:px-6 lg:px-8 relative">
-      {/* Brand Watermark */}
       <div className="absolute top-8 left-8 flex items-center gap-2">
          <div className="w-8 h-8 bg-primary text-white rounded-lg flex items-center justify-center font-bold text-xl">
             P
@@ -127,7 +101,6 @@ export default function AuthPage() {
         className="sm:mx-auto sm:w-full sm:max-w-md z-10"
       >
         <Card className="shadow-2xl border-0 overflow-hidden">
-          {/* Top colored accent line */}
           <div className="h-2 bg-gradient-to-r from-primary to-orange-400 w-full" />
           
           <CardContent className="px-8 pt-10 pb-12">
@@ -141,13 +114,28 @@ export default function AuthPage() {
                 >
                   <div className="text-center mb-8">
                     <h2 className="text-3xl font-bold text-secondary tracking-tight">Login to ParkPing</h2>
-                    <p className="mt-2 text-sm text-gray-500">Enter your mobile number to receive an OTP</p>
+                    <p className="mt-2 text-sm text-gray-500">Enter your email and mobile number to receive an OTP</p>
                   </div>
 
                   <form onSubmit={handleSendOTP} className="space-y-6">
                     <div>
+                      <label htmlFor="email" className="block text-sm font-medium text-gray-700 mb-2">
+                        Email Address
+                      </label>
+                      <input
+                        type="email"
+                        id="email"
+                        required
+                        className="block w-full rounded-xl border border-gray-200 px-4 py-4 text-lg bg-white focus:ring-2 focus:ring-primary focus:border-primary outline-none transition-all placeholder:text-gray-400"
+                        placeholder="you@example.com"
+                        value={email}
+                        onChange={(e) => setEmail(e.target.value)}
+                      />
+                    </div>
+
+                    <div>
                       <label htmlFor="phone" className="block text-sm font-medium text-gray-700 mb-2">
-                        Mobile Number
+                        Mobile Number (For Alerts)
                       </label>
                       <div className="relative rounded-xl shadow-sm border border-gray-200 bg-white focus-within:ring-2 focus-within:ring-primary focus-within:border-primary transition-all">
                         <div className="absolute inset-y-0 left-0 pl-4 flex items-center pointer-events-none gap-2">
@@ -159,16 +147,16 @@ export default function AuthPage() {
                           type="tel"
                           id="phone"
                           className="pl-[100px] block w-full outline-none py-4 bg-transparent text-lg font-medium text-gray-900 placeholder:text-gray-400 placeholder:font-normal"
-                          placeholder="98765 43210"
+                          placeholder="98765 43210 (Optional)"
                           value={phone}
                           onChange={(e) => setPhone(formatPhone(e.target.value).replace("+91 ", ""))}
-                          maxLength={11} // including spaces if formatted
+                          maxLength={11}
                         />
                       </div>
                     </div>
 
                     <Button type="submit" className="w-full text-lg h-14 bg-orange-500 hover:bg-orange-600 text-white" isLoading={loading}>
-                      Send OTP
+                      Send OTP via Email
                     </Button>
                     
                     <p className="text-center text-xs text-gray-400 mt-6 flex items-center justify-center gap-1">
@@ -185,15 +173,16 @@ export default function AuthPage() {
                 >
                   <button 
                     onClick={() => setStep("phone")}
+                    type="button"
                     className="flex items-center text-sm font-medium text-gray-500 hover:text-gray-900 mb-6 transition-colors"
                   >
                     <ArrowLeft className="w-4 h-4 mr-1" /> Back
                   </button>
 
                   <div className="mb-8">
-                    <h2 className="text-3xl font-bold text-secondary tracking-tight">Verify Device</h2>
+                    <h2 className="text-3xl font-bold text-secondary tracking-tight">Verify Email</h2>
                     <p className="mt-2 text-sm text-gray-500">
-                      We&apos;ve sent a 6-digit code to <span className="font-semibold text-gray-900">+91 {phone}</span>
+                      We&apos;ve sent a securely generated 6-digit code to <span className="font-semibold text-gray-900">{email}</span>
                     </p>
                   </div>
 
@@ -213,9 +202,11 @@ export default function AuthPage() {
                       </Button>
                       <button 
                          type="button" 
-                         className="w-full text-sm text-primary font-medium hover:text-primary-hover focus:outline-none"
+                         onClick={handleSendOTP}
+                         disabled={loading}
+                         className="w-full text-sm text-primary font-medium hover:text-primary-hover focus:outline-none disabled:opacity-50"
                       >
-                         Resend Code in 0:30
+                         Resend Code
                       </button>
                     </div>
                   </form>
@@ -225,9 +216,6 @@ export default function AuthPage() {
           </CardContent>
         </Card>
       </motion.div>
-      
-      {/* Interactive Background Elements hidden behind card */}
-      <div id="recaptcha-container" className="hidden"></div>
     </div>
   );
 }

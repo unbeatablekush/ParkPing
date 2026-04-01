@@ -5,24 +5,27 @@ import { supabaseAdmin } from "@/lib/supabase";
 export async function POST(req: Request) {
   try {
     const body = await req.json();
-    const { token, phone } = body;
+    const { email, phone } = body;
 
-    if (!token || !phone) {
-      return NextResponse.json({ success: false, error: "Missing parameters" }, { status: 400 });
+    if (!email) {
+      return NextResponse.json({ success: false, error: "Missing email" }, { status: 400 });
     }
 
     // Check if the user already exists
     const { data: existingUser } = await supabaseAdmin
       .from("users")
       .select("id")
-      .eq("phone", phone)
-      .single();
+      .eq("email", email)
+      .maybeSingle();
 
     if (!existingUser) {
-      // Insert new user if they don't exist
+      // Insert new user
+      const payload: Record<string, string> = { email };
+      if (phone) payload.phone = phone;
+      
       const { error: insertError } = await supabaseAdmin
         .from("users")
-        .insert([{ phone }]);
+        .insert([payload]);
         
       if (insertError) {
         console.error("Supabase insert error:", insertError);

@@ -5,18 +5,22 @@ import Link from "next/link";
 import { Button } from "@/components/ui/Button";
 import { Menu, X } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
-import { auth } from "@/lib/firebase";
-import { onAuthStateChanged } from "firebase/auth";
+import { supabaseClient } from "@/lib/supabase-client";
 
 export function Navbar() {
   const [isOpen, setIsOpen] = useState(false);
   const [isAuth, setIsAuth] = useState(false);
 
   useEffect(() => {
-    const unsub = onAuthStateChanged(auth, (user) => {
-      setIsAuth(!!user);
+    supabaseClient.auth.getSession().then(({ data: { session } }) => {
+      setIsAuth(!!session);
     });
-    return () => unsub();
+
+    const { data: { subscription } } = supabaseClient.auth.onAuthStateChange((_event, session) => {
+      setIsAuth(!!session);
+    });
+
+    return () => subscription.unsubscribe();
   }, []);
 
   const navLinks = [
