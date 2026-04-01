@@ -58,6 +58,12 @@ export default function LandingPage() {
                     </Button>
                   </Link>
                 </div>
+
+                <div className="mt-6 flex justify-center sm:justify-start">
+                  <Link href="/auth" className="text-gray-500 hover:text-primary font-medium transition-colors text-base flex items-center gap-1">
+                    Already have an account? Login <ArrowRight className="w-4 h-4" />
+                  </Link>
+                </div>
                 
                 <div className="mt-10 flex items-center gap-4 text-sm font-medium text-gray-500">
                   <div className="flex -space-x-2">

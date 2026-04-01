@@ -1,13 +1,23 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import Link from "next/link";
 import { Button } from "@/components/ui/Button";
 import { Menu, X } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
+import { auth } from "@/lib/firebase";
+import { onAuthStateChanged } from "firebase/auth";
 
 export function Navbar() {
   const [isOpen, setIsOpen] = useState(false);
+  const [isAuth, setIsAuth] = useState(false);
+
+  useEffect(() => {
+    const unsub = onAuthStateChanged(auth, (user) => {
+      setIsAuth(!!user);
+    });
+    return () => unsub();
+  }, []);
 
   const navLinks = [
     { name: "Home", href: "/" },
@@ -45,6 +55,11 @@ export function Navbar() {
             <Link href="/order">
               <Button variant="primary">Get Your QR Sticker</Button>
             </Link>
+            <Link href={isAuth ? "/dashboard" : "/auth"}>
+              <Button className="bg-orange-500 hover:bg-orange-600 text-white rounded-xl">
+                {isAuth ? "Dashboard" : "Login"}
+              </Button>
+            </Link>
           </div>
 
           {/* Mobile Menu Button */}
@@ -80,8 +95,13 @@ export function Navbar() {
                 </Link>
               ))}
               <div className="pt-2 px-3">
-                <Link href="/order" onClick={() => setIsOpen(false)}>
+                <Link href="/order" onClick={() => setIsOpen(false)} className="mb-3 block">
                   <Button variant="primary" className="w-full">Get Your QR Sticker</Button>
+                </Link>
+                <Link href={isAuth ? "/dashboard" : "/auth"} onClick={() => setIsOpen(false)}>
+                  <Button className="w-full bg-orange-500 hover:bg-orange-600 text-white rounded-xl">
+                    {isAuth ? "Dashboard" : "Login"}
+                  </Button>
                 </Link>
               </div>
             </div>

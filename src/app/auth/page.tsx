@@ -125,8 +125,8 @@ export default function AuthPage() {
                   exit={{ opacity: 0, x: -20 }}
                 >
                   <div className="text-center mb-8">
-                    <h2 className="text-3xl font-bold text-secondary tracking-tight">Welcome Back</h2>
-                    <p className="mt-2 text-sm text-gray-500">Sign in to manage your registered vehicles and scan history.</p>
+                    <h2 className="text-3xl font-bold text-secondary tracking-tight">Login to ParkPing</h2>
+                    <p className="mt-2 text-sm text-gray-500">Enter your mobile number to receive an OTP</p>
                   </div>
 
                   <form onSubmit={handleSendOTP} className="space-y-6">
@@ -152,12 +152,12 @@ export default function AuthPage() {
                       </div>
                     </div>
 
-                    <Button type="submit" className="w-full text-lg h-14" isLoading={loading}>
+                    <Button type="submit" className="w-full text-lg h-14 bg-orange-500 hover:bg-orange-600 text-white" isLoading={loading}>
                       Send OTP
                     </Button>
                     
                     <p className="text-center text-xs text-gray-400 mt-6 flex items-center justify-center gap-1">
-                      <ShieldCheck className="w-4 h-4" /> Secure, 256-bit encrypted authentication
+                      New user? You&apos;ll be registered automatically
                     </p>
                   </form>
                 </motion.div>
