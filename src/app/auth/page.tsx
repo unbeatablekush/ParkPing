@@ -14,8 +14,8 @@ import { RecaptchaVerifier, signInWithPhoneNumber, ConfirmationResult } from "fi
 
 declare global {
   interface Window {
-    recaptchaVerifier: RecaptchaVerifier;
-    confirmationResult: ConfirmationResult;
+    recaptchaVerifier: RecaptchaVerifier | undefined;
+    confirmationResult: ConfirmationResult | undefined;
   }
 }
 
@@ -28,13 +28,28 @@ export default function AuthPage() {
   const toast = useToast();
 
   useEffect(() => {
-    if (!window.recaptchaVerifier) {
-      window.recaptchaVerifier = new RecaptchaVerifier(
-        auth, 
-        'recaptcha-container', 
-        { size: 'invisible' }
-      );
-    }
+    // Clear dead instances (fixes 'reCAPTCHA client element has been removed' error on hot reloads)
+    try {
+      if (window.recaptchaVerifier) {
+        window.recaptchaVerifier.clear();
+        window.recaptchaVerifier = undefined;
+      }
+    } catch(e) {}
+
+    window.recaptchaVerifier = new RecaptchaVerifier(
+      auth, 
+      'recaptcha-container', 
+      { size: 'invisible' }
+    );
+
+    return () => {
+      try {
+        if (window.recaptchaVerifier) {
+          window.recaptchaVerifier.clear();
+          window.recaptchaVerifier = undefined;
+        }
+      } catch(e) {}
+    };
   }, []);
 
   const handleSendOTP = async (e: React.FormEvent) => {
