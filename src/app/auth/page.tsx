@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import { motion, AnimatePresence } from "framer-motion";
 import { ArrowLeft, ShieldCheck } from "lucide-react";
@@ -9,6 +9,15 @@ import { Button } from "@/components/ui/Button";
 import { OTPInput } from "@/components/ui/OTPInput";
 import { formatPhone } from "@/lib/utils";
 import { useToast } from "@/components/ui/ToastProvider";
+import { auth } from "@/lib/firebase";
+import { RecaptchaVerifier, signInWithPhoneNumber, ConfirmationResult } from "firebase/auth";
+
+declare global {
+  interface Window {
+    recaptchaVerifier: RecaptchaVerifier;
+    confirmationResult: ConfirmationResult;
+  }
+}
 
 export default function AuthPage() {
   const [step, setStep] = useState<"phone" | "otp">("phone");
@@ -18,20 +27,37 @@ export default function AuthPage() {
   const router = useRouter();
   const toast = useToast();
 
+  useEffect(() => {
+    if (!window.recaptchaVerifier) {
+      window.recaptchaVerifier = new RecaptchaVerifier(
+        auth, 
+        'recaptcha-container', 
+        { size: 'invisible' }
+      );
+    }
+  }, []);
+
   const handleSendOTP = async (e: React.FormEvent) => {
     e.preventDefault();
     if (phone.length < 10) {
       toast("Please enter a valid 10-digit number", "error");
       return;
     }
-    setLoading(true);
     
-    // Simulate sending OTP since we might lack Firebase credentials at dev time
-    setTimeout(() => {
-      setLoading(false);
+    setLoading(true);
+    try {
+      const formattedPhone = `+91${phone}`;
+      const confirmation = await signInWithPhoneNumber(auth, formattedPhone, window.recaptchaVerifier);
+      window.confirmationResult = confirmation;
+      
       setStep("otp");
       toast("OTP sent to your number!", "success");
-    }, 1200);
+    } catch (error) {
+      console.error("Firebase SMS error:", error);
+      toast("Failed to send OTP. Please try again.", "error");
+    } finally {
+      setLoading(false);
+    }
   };
 
   const handleVerifyOTP = async (e: React.FormEvent) => {
@@ -40,14 +66,34 @@ export default function AuthPage() {
       toast("Please enter the complete 6-digit OTP", "error");
       return;
     }
-    setLoading(true);
     
-    // Simulate verifying OTP and redirecting
-    setTimeout(() => {
-      setLoading(false);
+    setLoading(true);
+    try {
+      if (!window.confirmationResult) {
+        throw new Error("Missing confirmation payload");
+      }
+      
+      const result = await window.confirmationResult.confirm(otp);
+      const idToken = await result.user.getIdToken();
+      
+      const res = await fetch('/api/auth/verify-otp', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ token: idToken, phone })
+      });
+
+      if (!res.ok) {
+         throw new Error("Failed backend verification");
+      }
+
       toast("Successfully verified!", "success");
       router.push("/dashboard");
-    }, 1500);
+    } catch (error) {
+      console.error("Verification error:", error);
+      toast("Invalid OTP. Please try again.", "error");
+    } finally {
+      setLoading(false);
+    }
   };
 
   return (

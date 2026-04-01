@@ -1,4 +1,3 @@
-// Mock data for ParkPing Dashboard to work offline/without live Supabase
 export const MOCK_USER = {
   name: "Arjun Mehta",
   phone: "+91 98765 43210",
