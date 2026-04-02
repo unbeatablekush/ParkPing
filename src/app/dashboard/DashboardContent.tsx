@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useEffect } from "react";
-import { MOCK_STATS, MOCK_VEHICLES, MOCK_SCAN_HISTORY } from "@/lib/mock-data";
+
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/Card";
 import { Button } from "@/components/ui/Button";
 import { useToast } from "@/components/ui/ToastProvider";
@@ -21,6 +21,7 @@ export default function DashboardContent({ tab }: DashboardContentProps) {
   const [loading, setLoading] = useState(false);
   const toast = useToast();
   const supabase = createClient();
+  const [vehicles, setVehicles] = useState<any[]>([]);
   
   // Settings Form State
   const [fullName, setFullName] = useState("");
@@ -42,6 +43,9 @@ export default function DashboardContent({ tab }: DashboardContentProps) {
              setDob(data.date_of_birth || "");
              setPhone(data.phone || "");
          }
+
+         const { data: vehiclesData } = await supabase.from('vehicles').select('*').eq('user_id', session.user.id);
+         if (vehiclesData) setVehicles(vehiclesData);
       }
     });
   }, [supabase]);
@@ -105,10 +109,10 @@ export default function DashboardContent({ tab }: DashboardContentProps) {
 
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
         {[
-          { label: "Total Scans", value: MOCK_STATS.totalScans },
-          { label: "Calls Received", value: MOCK_STATS.callsReceived },
-          { label: "Alerts Received", value: MOCK_STATS.alertsReceived },
-          { label: "Cars Registered", value: MOCK_STATS.carsRegistered },
+          { label: "Total Scans", value: 0 },
+          { label: "Calls Received", value: 0 },
+          { label: "Alerts Received", value: 0 },
+          { label: "Cars Registered", value: vehicles.length },
         ].map((stat, i) => (
           <Card key={i} className="border-0 shadow-sm border-b-[3px] border-b-primary/20">
             <CardContent className="p-6">
@@ -122,37 +126,8 @@ export default function DashboardContent({ tab }: DashboardContentProps) {
       <div>
         <h3 className="text-xl font-bold text-secondary mb-4">Recent Scan Activity</h3>
         <Card>
-          <div className="divide-y divide-gray-100">
-             {/* Use existing mock data just to preserve visual structure until APIs are added later */}
-            {MOCK_SCAN_HISTORY.slice(0, 3).map((scan) => (
-              <div key={scan.id} className="p-4 sm:px-6 flex items-center justify-between hover:bg-gray-50/50 transition-colors">
-                <div className="flex items-center gap-4">
-                  <div className={cn(
-                    "w-10 h-10 rounded-full flex items-center justify-center text-white shrink-0",
-                    scan.method === "call" ? "bg-primary" : "bg-secondary"
-                  )}>
-                    {scan.method === "call" ? <Phone className="w-4 h-4" /> : <BellRing className="w-4 h-4" />}
-                  </div>
-                  <div>
-                    <p className="font-semibold text-gray-900">{scan.car}</p>
-                    <p className="text-sm text-gray-500 flex items-center gap-1">
-                      <MapPin className="w-3 h-3" /> {scan.location}
-                    </p>
-                  </div>
-                </div>
-                <div className="text-right">
-                  <p className="text-sm font-medium text-gray-900">
-                     {new Date(scan.date).toLocaleDateString('en-IN', { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' })}
-                  </p>
-                  <span className={cn(
-                    "inline-flex items-center px-2 py-0.5 rounded-full text-xs font-semibold uppercase tracking-wider mt-1",
-                    scan.status === "resolved" ? "bg-green-100 text-green-700" : "bg-red-100 text-red-700"
-                  )}>
-                    {scan.status.replace("_", " ")}
-                  </span>
-                </div>
-              </div>
-            ))}
+          <div className="divide-y divide-gray-100 p-8 text-center text-gray-500">
+             No recent scans to display. Your car is safe!
           </div>
           <div className="p-4 bg-gray-50 border-t border-gray-100 rounded-b-2xl text-center">
             <Link href="/dashboard?tab=history" className="text-primary hover:text-primary-hover font-semibold text-sm">
@@ -179,7 +154,15 @@ export default function DashboardContent({ tab }: DashboardContentProps) {
       </div>
 
       <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-        {MOCK_VEHICLES.map((v) => (
+        {vehicles.length === 0 ? (
+          <div className="col-span-full p-12 text-center border-2 border-dashed border-gray-200 rounded-2xl bg-gray-50">
+             <p className="text-gray-500 mb-4">No vehicles registered yet.</p>
+             <Link href="/register">
+               <Button variant="primary">Register Your First Car</Button>
+             </Link>
+          </div>
+        ) : (
+        vehicles.map((v) => (
           <Card key={v.id} className="relative overflow-hidden group">
             <CardHeader className="border-b border-gray-50 pb-4 bg-gray-50/50">
               <div className="flex justify-between items-start">
@@ -216,7 +199,7 @@ export default function DashboardContent({ tab }: DashboardContentProps) {
                </div>
             </CardContent>
           </Card>
-        ))}
+        )))}
       </div>
     </div>
   );
@@ -241,29 +224,11 @@ export default function DashboardContent({ tab }: DashboardContentProps) {
               </tr>
             </thead>
             <tbody className="divide-y divide-gray-100">
-              {MOCK_SCAN_HISTORY.map((scan) => (
-                <tr key={scan.id} className="hover:bg-gray-50/50 transition-colors">
-                  <td className="py-4 px-6 font-medium text-gray-900 text-sm">
-                     {new Date(scan.date).toLocaleString('en-IN', { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' })}
-                  </td>
-                  <td className="py-4 px-6 text-gray-600 font-semibold">{scan.car}</td>
-                  <td className="py-4 px-6">
-                    <span className="flex items-center gap-1.5 text-sm font-medium capitalize text-gray-700">
-                      {scan.method === "call" ? <Phone className="w-3.5 h-3.5 text-primary"/> : <BellRing className="w-3.5 h-3.5 text-secondary"/>}
-                      {scan.method}
-                    </span>
-                  </td>
-                  <td className="py-4 px-6 text-gray-600 text-sm">{scan.location}</td>
-                  <td className="py-4 px-6">
-                    <span className={cn(
-                      "inline-flex items-center px-2 py-0.5 rounded-full text-xs font-semibold uppercase tracking-wider mt-1",
-                      scan.status === "resolved" ? "bg-green-100 text-green-700" : "bg-red-100 text-red-700"
-                    )}>
-                      {scan.status.replace("_", " ")}
-                    </span>
-                  </td>
-                </tr>
-              ))}
+               <tr>
+                 <td colSpan={5} className="py-8 text-center text-gray-500">
+                    No scan history available for your vehicles.
+                 </td>
+               </tr>
             </tbody>
           </table>
         </div>

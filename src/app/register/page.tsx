@@ -9,10 +9,12 @@ import { Button } from "@/components/ui/Button";
 import { Car, Camera, CheckCircle2 } from "lucide-react";
 import { formatCarNumber } from "@/lib/utils";
 import { useToast } from "@/components/ui/ToastProvider";
+import { createClient } from "@/lib/supabase/client";
 
 export default function RegisterVehiclePage() {
   const router = useRouter();
   const toast = useToast();
+  const supabase = createClient();
   const [loading, setLoading] = useState(false);
   const [success, setSuccess] = useState(false);
 
@@ -24,17 +26,39 @@ export default function RegisterVehiclePage() {
     color: ""
   });
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!form.carNumber || !form.make || !form.model || !form.fullName) {
        return toast("Please fill in all mandatory fields.", "error");
     }
 
     setLoading(true);
-    setTimeout(() => {
-      setLoading(false);
-      setSuccess(true);
-    }, 1500);
+    
+    // Get current user session
+    const { data: { session } } = await supabase.auth.getSession();
+    if (!session) {
+       toast("You must be logged in to register a vehicle.", "error");
+       setLoading(false);
+       return;
+    }
+
+    // Insert into vehicles table
+    const { error } = await supabase.from('vehicles').insert({
+        user_id: session.user.id,
+        car_number: form.carNumber,
+        make: form.make,
+        model: form.model,
+        color: form.color || null,
+        status: 'Active'
+    });
+
+    setLoading(false);
+
+    if (error) {
+       toast("Failed to register vehicle: " + error.message, "error");
+    } else {
+       setSuccess(true);
+    }
   };
 
   if (success) {

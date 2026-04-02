@@ -69,6 +69,17 @@ export default function SignupPage() {
 
       if (error) throw error;
       
+      // Check if they are a returning user who already completed the profile
+      const { data: { session } } = await supabase.auth.getSession();
+      if (session) {
+         const { data: profile } = await supabase.from('profiles').select('profile_completed').eq('id', session.user.id).single();
+         if (profile?.profile_completed) {
+            toast("Successfully logged in!", "success");
+            router.push("/dashboard");
+            return;
+         }
+      }
+
       localStorage.setItem("temp_phone", phone);
       toast("Successfully verified!", "success");
       router.push("/onboarding");
