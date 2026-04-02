@@ -1,12 +1,14 @@
 "use client";
 
-
-import { MOCK_STATS, MOCK_USER, MOCK_VEHICLES, MOCK_SCAN_HISTORY } from "@/lib/mock-data";
+import { useState, useEffect } from "react";
+import { MOCK_STATS, MOCK_VEHICLES, MOCK_SCAN_HISTORY } from "@/lib/mock-data";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/Card";
 import { Button } from "@/components/ui/Button";
+import { useToast } from "@/components/ui/ToastProvider";
 import { MapPin, Phone, BellRing, Plus, QrCode } from "lucide-react";
 import Link from "next/link";
 import { cn } from "@/lib/utils";
+import { createClient } from "@/lib/supabase/client";
 
 interface DashboardContentProps {
   tab: string | string[];
@@ -14,11 +16,90 @@ interface DashboardContentProps {
 
 export default function DashboardContent({ tab }: DashboardContentProps) {
   const currentTab = Array.isArray(tab) ? tab[0] : tab;
+  const [profile, setProfile] = useState<{ full_name?: string; phone?: string; age?: number; gender?: string; date_of_birth?: string; } | null>(null);
+  const [email, setEmail] = useState("");
+  const [loading, setLoading] = useState(false);
+  const toast = useToast();
+  const supabase = createClient();
+  
+  // Settings Form State
+  const [fullName, setFullName] = useState("");
+  const [age, setAge] = useState("");
+  const [gender, setGender] = useState("");
+  const [dob, setDob] = useState("");
+  const [phone, setPhone] = useState("");
+
+  useEffect(() => {
+    supabase.auth.getSession().then(async ({ data: { session } }) => {
+      if (session) {
+         setEmail(session.user.email || "");
+         const { data } = await supabase.from('profiles').select('*').eq('id', session.user.id).single();
+         if (data) {
+             setProfile(data);
+             setFullName(data.full_name || "");
+             setAge(data.age?.toString() || "");
+             setGender(data.gender || "");
+             setDob(data.date_of_birth || "");
+             setPhone(data.phone || "");
+         }
+      }
+    });
+  }, [supabase]);
+
+  const handleUpdateProfile = async (e: React.FormEvent) => {
+     e.preventDefault();
+     setLoading(true);
+     const { data: { session } } = await supabase.auth.getSession();
+     if (!session) return;
+     
+     const { error } = await supabase.from('profiles').update({
+        full_name: fullName,
+        age: parseInt(age) || null,
+        gender,
+        date_of_birth: dob,
+        phone
+     }).eq('id', session.user.id);
+     
+     setLoading(false);
+     if (error) {
+        toast("Failed to update profile", "error");
+     } else {
+        toast("Profile updated successfully", "success");
+        // re-fetch to update progress bar dynamically
+        const { data } = await supabase.from('profiles').select('*').eq('id', session.user.id).single();
+        if (data) setProfile(data);
+     }
+  };
+
+  const handleResetPassword = async () => {
+    if (!email) return;
+    setLoading(true);
+    const { error } = await supabase.auth.resetPasswordForEmail(email);
+    setLoading(false);
+    if (error) {
+        toast(error.message, "error");
+    } else {
+        toast("Check your email for the password reset link", "success");
+    }
+  };
+
+  const calcCompletion = () => {
+      if (!profile) return 0;
+      let count = 0;
+      if (profile.full_name) count++;
+      if (profile.age) count++;
+      if (profile.gender) count++;
+      if (profile.date_of_birth) count++;
+      if (profile.phone) count++;
+      return (count / 5) * 100;
+  };
+
+  const completionPercent = calcCompletion();
 
   const renderOverview = () => (
     <div className="space-y-8 animate-in fade-in duration-500">
       <div>
-        <h1 className="text-3xl font-bold text-secondary mb-2">Hello, {MOCK_USER.name} 👋</h1>
+        <h1 className="text-3xl font-bold text-secondary mb-2">Hello, {profile?.full_name?.split(' ')[0] || "there"} 👋</h1>
         <p className="text-gray-500">Here&apos;s what is happening with your registered vehicles.</p>
       </div>
 
@@ -42,6 +123,7 @@ export default function DashboardContent({ tab }: DashboardContentProps) {
         <h3 className="text-xl font-bold text-secondary mb-4">Recent Scan Activity</h3>
         <Card>
           <div className="divide-y divide-gray-100">
+             {/* Use existing mock data just to preserve visual structure until APIs are added later */}
             {MOCK_SCAN_HISTORY.slice(0, 3).map((scan) => (
               <div key={scan.id} className="p-4 sm:px-6 flex items-center justify-between hover:bg-gray-50/50 transition-colors">
                 <div className="flex items-center gap-4">
@@ -191,32 +273,79 @@ export default function DashboardContent({ tab }: DashboardContentProps) {
 
   const renderSettings = () => (
     <div className="space-y-6 max-w-2xl animate-in fade-in duration-500">
-      <div className="mb-8">
-        <h1 className="text-3xl font-bold text-secondary mb-2">Account Settings</h1>
-        <p className="text-gray-500">Manage your notification preferences and profile details.</p>
+      <div className="mb-6 flex justify-between items-end">
+        <div>
+           <h1 className="text-3xl font-bold text-secondary mb-2">Account Settings</h1>
+           <p className="text-gray-500">Manage your profile details and preferences.</p>
+        </div>
+      </div>
+      
+      {/* Profile Completion Bar */}
+      <div className="mb-6">
+          <div className="flex justify-between items-end mb-2 text-sm font-medium text-gray-500">
+             <span>Profile Completion</span>
+             <span className="text-primary font-bold">{Math.round(completionPercent)}%</span>
+          </div>
+          <div className="w-full bg-gray-200 rounded-full h-2">
+             <div className="bg-primary h-2 rounded-full transition-all duration-500" style={{ width: `${completionPercent}%` }}></div>
+          </div>
       </div>
 
       <Card>
-        <CardHeader>
-          <CardTitle>Notifications</CardTitle>
-          <p className="text-sm text-gray-500">Control how you receive alerts from users.</p>
+        <CardHeader className="border-b border-gray-100 pb-4 mb-4">
+          <CardTitle>Profile Details</CardTitle>
+          <p className="text-sm text-gray-500">Update your personal information.</p>
         </CardHeader>
-        <CardContent className="space-y-6">
-          {[
-            { title: "Push Alerts", desc: "Receive native device notifications when scanned." },
-            { title: "Call Forwarding", desc: "Allow masked calls through Twilio from scanners." },
-            { title: "Do Not Disturb", desc: "Silence all alerts between 10PM and 6AM." }
-          ].map((item, i) => (
-             <div key={i} className="flex items-center justify-between border-b border-gray-100 pb-4 last:pb-0 last:border-0">
-               <div>
-                  <h4 className="font-semibold text-gray-900">{item.title}</h4>
-                  <p className="text-sm text-gray-500">{item.desc}</p>
-               </div>
-               <div className="w-12 h-6 bg-primary rounded-full relative cursor-pointer shadow-inner">
-                  <div className="w-4 h-4 bg-white rounded-full absolute right-1 top-1 shadow-sm" />
-               </div>
+        <CardContent>
+          <form onSubmit={handleUpdateProfile} className="space-y-5">
+             <div className="grid grid-cols-2 gap-4">
+                 <div>
+                     <label className="block text-sm font-medium text-gray-700 mb-1">Full Name</label>
+                     <input required type="text" value={fullName} onChange={e => setFullName(e.target.value)} className="w-full rounded-lg border border-gray-200 px-4 py-2 outline-none focus:ring-2 focus:ring-primary focus:border-primary" />
+                 </div>
+                 <div>
+                     <label className="block text-sm font-medium text-gray-700 mb-1">Phone Number</label>
+                     <input required type="text" value={phone} onChange={e => setPhone(e.target.value)} className="w-full rounded-lg border border-gray-200 px-4 py-2 outline-none focus:ring-2 focus:ring-primary focus:border-primary" />
+                 </div>
              </div>
-          ))}
+             
+             <div className="grid grid-cols-2 gap-4">
+                 <div>
+                     <label className="block text-sm font-medium text-gray-700 mb-1">Age</label>
+                     <input type="number" value={age} onChange={e => setAge(e.target.value)} className="w-full rounded-lg border border-gray-200 px-4 py-2 outline-none focus:ring-2 focus:ring-primary focus:border-primary" />
+                 </div>
+                 <div>
+                     <label className="block text-sm font-medium text-gray-700 mb-1">Gender</label>
+                     <select value={gender} onChange={e => setGender(e.target.value)} className="w-full rounded-lg border border-gray-200 px-4 py-2 outline-none focus:ring-2 focus:ring-primary focus:border-primary bg-white">
+                         <option value="">Select</option>
+                         <option value="Male">Male</option>
+                         <option value="Female">Female</option>
+                         <option value="Other">Other</option>
+                         <option value="Prefer not to say">Prefer not to say</option>
+                     </select>
+                 </div>
+             </div>
+             
+             <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">Date of Birth</label>
+                <input type="date" value={dob} onChange={e => setDob(e.target.value)} className="w-full rounded-lg border border-gray-200 px-4 py-2 outline-none focus:ring-2 focus:ring-primary focus:border-primary" />
+             </div>
+             
+             <div className="pt-2">
+                 <Button type="submit" isLoading={loading}>Save Changes</Button>
+             </div>
+          </form>
+        </CardContent>
+      </Card>
+      
+      <Card>
+        <CardHeader className="border-b border-gray-100 pb-4 mb-4">
+           <CardTitle>Authentication</CardTitle>
+           <p className="text-sm text-gray-500">Manage your password.</p>
+        </CardHeader>
+        <CardContent>
+           <p className="text-sm text-gray-600 mb-4">Click below to receive a secure password reset link to your email address ({email}).</p>
+           <Button variant="outline" onClick={handleResetPassword} disabled={loading || !email}>Change Password</Button>
         </CardContent>
       </Card>
 

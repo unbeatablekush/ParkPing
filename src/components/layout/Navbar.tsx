@@ -5,19 +5,32 @@ import Link from "next/link";
 import { Button } from "@/components/ui/Button";
 import { Menu, X } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
-import { supabaseClient } from "@/lib/supabase-client";
+import { createClient } from "@/lib/supabase/client";
 
 export function Navbar() {
   const [isOpen, setIsOpen] = useState(false);
   const [isAuth, setIsAuth] = useState(false);
+  const [userName, setUserName] = useState("");
 
   useEffect(() => {
-    supabaseClient.auth.getSession().then(({ data: { session } }) => {
+    const supabase = createClient();
+    
+    supabase.auth.getSession().then(async ({ data: { session } }) => {
       setIsAuth(!!session);
+      if (session) {
+         const { data } = await supabase.from('profiles').select('full_name').eq('id', session.user.id).single();
+         if (data?.full_name) setUserName(data.full_name);
+      }
     });
 
-    const { data: { subscription } } = supabaseClient.auth.onAuthStateChange((_event, session) => {
+    const { data: { subscription } } = supabase.auth.onAuthStateChange(async (_event, session) => {
       setIsAuth(!!session);
+      if (session) {
+         const { data } = await supabase.from('profiles').select('full_name').eq('id', session.user.id).single();
+         if (data?.full_name) setUserName(data.full_name);
+      } else {
+         setUserName("");
+      }
     });
 
     return () => subscription.unsubscribe();
@@ -59,9 +72,9 @@ export function Navbar() {
             <Link href="/order">
               <Button variant="primary">Get Your QR Sticker</Button>
             </Link>
-            <Link href={isAuth ? "/dashboard" : "/auth"}>
+            <Link href={isAuth ? "/dashboard" : "/auth/login"}>
               <Button className="bg-orange-500 hover:bg-orange-600 text-white rounded-xl">
-                {isAuth ? "Dashboard" : "Login"}
+                {isAuth ? (userName || "Dashboard") : "Login / Sign Up"}
               </Button>
             </Link>
           </div>
@@ -102,9 +115,9 @@ export function Navbar() {
                 <Link href="/order" onClick={() => setIsOpen(false)} className="mb-3 block">
                   <Button variant="primary" className="w-full">Get Your QR Sticker</Button>
                 </Link>
-                <Link href={isAuth ? "/dashboard" : "/auth"} onClick={() => setIsOpen(false)}>
+                <Link href={isAuth ? "/dashboard" : "/auth/login"} onClick={() => setIsOpen(false)}>
                   <Button className="w-full bg-orange-500 hover:bg-orange-600 text-white rounded-xl">
-                    {isAuth ? "Dashboard" : "Login"}
+                    {isAuth ? (userName || "Dashboard") : "Login / Sign Up"}
                   </Button>
                 </Link>
               </div>

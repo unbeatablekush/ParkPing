@@ -1,10 +1,10 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import Link from "next/link";
 import { LayoutDashboard, CarFront, History, Settings, Menu, X, LogOut } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
-import { MOCK_USER } from "@/lib/mock-data";
+import { createClient } from "@/lib/supabase/client";
 
 const navItems = [
   { name: "Overview", href: "/dashboard", icon: LayoutDashboard },
@@ -15,6 +15,33 @@ const navItems = [
 
 export default function DashboardLayout({ children }: { children: React.ReactNode }) {
   const [sidebarOpen, setSidebarOpen] = useState(false);
+  const [profile, setProfile] = useState<{ full_name?: string; phone?: string; } | null>(null);
+  const supabase = createClient();
+
+  useEffect(() => {
+    supabase.auth.getSession().then(async ({ data: { session } }) => {
+      if (session) {
+         const { data } = await supabase.from('profiles').select('*').eq('id', session.user.id).single();
+         if (data) setProfile(data);
+      }
+    });
+
+    const { data: { subscription } } = supabase.auth.onAuthStateChange(async (_event, session) => {
+      if (session) {
+         const { data } = await supabase.from('profiles').select('*').eq('id', session.user.id).single();
+         if (data) setProfile(data);
+      } else {
+         setProfile(null);
+         window.location.href = '/auth/login';
+      }
+    });
+
+    return () => subscription.unsubscribe();
+  }, [supabase]);
+
+  const handleLogout = async () => {
+     await supabase.auth.signOut();
+  };
 
   return (
     <div className="min-h-screen bg-gray-50 flex">
@@ -50,38 +77,34 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
         </div>
 
         <nav className="flex-1 px-4 py-8 space-y-2 overflow-y-auto">
-          {navItems.map((item) => {
-            // Note: Since we are using URL queries '?tab=xxx' for tabs in the same page for simplicity (as requested to make UI minimal),
-            // this active check is rudimentary. In a fuller app, we might use next/router to check query params.
-            return (
-              <a
-                key={item.name}
-                href={item.href}
-                className="flex items-center gap-3 px-4 py-3 rounded-xl font-medium transition-colors text-gray-600 hover:bg-primary/5 hover:text-primary"
-              >
-                <item.icon className="w-5 h-5 opacity-70" />
-                {item.name}
-              </a>
-            );
-          })}
+          {navItems.map((item) => (
+            <a
+              key={item.name}
+              href={item.href}
+              className="flex items-center gap-3 px-4 py-3 rounded-xl font-medium transition-colors text-gray-600 hover:bg-primary/5 hover:text-primary"
+            >
+              <item.icon className="w-5 h-5 opacity-70" />
+              {item.name}
+            </a>
+          ))}
         </nav>
 
         <div className="p-4 border-t border-gray-100">
           <div className="flex items-center gap-3 px-4 py-3 bg-gray-50 rounded-xl mb-4">
             <div className="w-10 h-10 rounded-full bg-secondary text-white flex items-center justify-center font-bold">
-              {MOCK_USER.name.charAt(0)}
+              {profile?.full_name?.charAt(0) || "U"}
             </div>
             <div className="flex-1 min-w-0">
               <p className="text-sm font-semibold tracking-tight text-gray-900 truncate">
-                {MOCK_USER.name}
+                {profile?.full_name || "User"}
               </p>
               <p className="text-xs text-gray-500 font-medium truncate">
-                {MOCK_USER.phone}
+                {profile?.phone || "No phone"}
               </p>
             </div>
           </div>
           
-          <button className="flex w-full items-center gap-3 px-4 py-3 rounded-xl font-medium text-red-600 hover:bg-red-50 transition-colors">
+          <button onClick={handleLogout} className="flex w-full items-center gap-3 px-4 py-3 rounded-xl font-medium text-red-600 hover:bg-red-50 transition-colors">
             <LogOut className="w-5 h-5 opacity-70" />
             Sign out
           </button>
