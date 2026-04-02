@@ -5,13 +5,23 @@ import { useState, useEffect } from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/Card";
 import { Button } from "@/components/ui/Button";
 import { useToast } from "@/components/ui/ToastProvider";
-import { MapPin, Phone, BellRing, Plus, QrCode } from "lucide-react";
+import { Plus, QrCode } from "lucide-react";
 import Link from "next/link";
 import { cn } from "@/lib/utils";
 import { createClient } from "@/lib/supabase/client";
 
 interface DashboardContentProps {
   tab: string | string[];
+}
+
+interface Vehicle {
+  id: string;
+  car_number: string;
+  make: string;
+  model: string;
+  color?: string;
+  status: string;
+  qr_id?: string;
 }
 
 export default function DashboardContent({ tab }: DashboardContentProps) {
@@ -21,7 +31,7 @@ export default function DashboardContent({ tab }: DashboardContentProps) {
   const [loading, setLoading] = useState(false);
   const toast = useToast();
   const supabase = createClient();
-  const [vehicles, setVehicles] = useState<any[]>([]);
+  const [vehicles, setVehicles] = useState<Vehicle[]>([]);
   
   // Settings Form State
   const [fullName, setFullName] = useState("");
