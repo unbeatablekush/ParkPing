@@ -1,0 +1,45 @@
+
+> parkping-app@0.1.0 build
+> next build
+
+  ▲ Next.js 14.2.35
+  - Environments: .env.local
+
+   Creating an optimized production build ...
+ ✓ Compiled successfully
+   Linting and checking validity of types ...
+   Collecting page data ...
+   Generating static pages (0/15) ...
+   Generating static pages (3/15) 
+   Generating static pages (7/15) 
+   Generating static pages (11/15) 
+ ✓ Generating static pages (15/15)
+   Finalizing page optimization ...
+   Collecting build traces ...
+
+Route (app)                              Size     First Load JS
+┌ ○ /                                    6.36 kB         219 kB
+├ ○ /_not-found                          138 B          87.5 kB
+├ ○ /auth/forgot-password                3.43 kB         212 kB
+├ ○ /auth/login                          3.94 kB         212 kB
+├ ○ /auth/signup                         4.57 kB         213 kB
+├ ○ /contact                             3.85 kB         216 kB
+├ ƒ /dashboard                           5.59 kB         214 kB
+├ ○ /onboarding                          5.27 kB         205 kB
+├ ○ /order                               3.38 kB         216 kB
+├ ○ /privacy                             1.05 kB         213 kB
+├ ○ /register                            3.5 kB          216 kB
+├ ƒ /scan/[qr-id]                        6.77 kB         143 kB
+├ ƒ /scan/[qr-id]/waiting                2.6 kB          139 kB
+└ ○ /terms                               1.02 kB         213 kB
++ First Load JS shared by all            87.3 kB
+  ├ chunks/117-4f5b424f20efdcae.js       31.7 kB
+  ├ chunks/fd9d1056-b11b2651f33aae7f.js  53.6 kB
+  └ other shared chunks (total)          1.95 kB
+
+
+ƒ Middleware                             79.6 kB
+
+○  (Static)   prerendered as static content
+ƒ  (Dynamic)  server-rendered on demand
+

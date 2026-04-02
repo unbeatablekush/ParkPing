@@ -6,7 +6,6 @@ import { Button } from "@/components/ui/Button";
 import { useToast } from "@/components/ui/ToastProvider";
 import { Plus, QrCode } from "lucide-react";
 import Link from "next/link";
-import { cn } from "@/lib/utils";
 import { createClient } from "@/lib/supabase/client";
 
 interface DashboardContentProps {
@@ -19,7 +18,6 @@ interface Vehicle {
   make: string;
   model: string;
   color?: string;
-  status: string;
   qr_id?: string;
 }
 
@@ -218,11 +216,8 @@ export default function DashboardContent({ tab }: DashboardContentProps) {
                   <CardTitle className="text-2xl mb-1">{v.car_number}</CardTitle>
                   <p className="text-sm text-gray-500 font-medium">{v.make} {v.model} • {v.color}</p>
                 </div>
-                <span className={cn(
-                  "px-3 py-1 rounded-full text-xs font-bold uppercase tracking-wider",
-                  v.status === "Active" ? "bg-success/10 text-success" : "bg-orange-100 text-orange-700"
-                )}>
-                  {v.status}
+                <span className="px-3 py-1 rounded-full text-xs font-bold uppercase tracking-wider bg-success/10 text-success">
+                  Registered
                 </span>
               </div>
             </CardHeader>
@@ -237,13 +232,9 @@ export default function DashboardContent({ tab }: DashboardContentProps) {
                        <p className="text-xs text-gray-500 font-medium font-mono">{v.qr_id || "Awaiting mapping"}</p>
                      </div>
                   </div>
-                  {v.status === "Active" ? (
-                      <Button variant="outline" size="sm">Manage</Button>
-                  ) : (
-                      <Link href="/order">
-                        <Button variant="primary" size="sm">Order Sticker</Button>
-                      </Link>
-                  )}
+                  <Link href="/order">
+                    <Button variant="primary" size="sm">Order Sticker</Button>
+                  </Link>
                </div>
             </CardContent>
           </Card>

@@ -49,7 +49,6 @@ export default function RegisterVehiclePage() {
         make: form.make,
         model: form.model,
         color: form.color || null,
-        status: 'Active'
     });
 
     setLoading(false);
@@ -126,15 +125,18 @@ export default function RegisterVehiclePage() {
                 </div>
 
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-2">Make</label>
-                  <input
-                    type="text"
+                  <label className="block text-sm font-medium text-gray-700 mb-2">Car Company (Make)</label>
+                  <select
                     required
                     className="w-full h-12 px-4 rounded-xl border border-gray-200 outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary transition-all bg-gray-50 focus:bg-white"
-                    placeholder="Hyundai, Maruti, etc."
                     value={form.make}
                     onChange={(e) => setForm({ ...form, make: e.target.value })}
-                  />
+                  >
+                    <option value="">Select Company</option>
+                    {["Maruti Suzuki", "Hyundai", "Tata", "Honda", "Toyota", "Mahindra", "Kia", "MG", "Volkswagen", "Skoda", "Renault", "Nissan", "Ford", "BMW", "Mercedes-Benz", "Audi", "Jeep", "Citroen", "Other"].map(m => (
+                      <option key={m} value={m}>{m}</option>
+                    ))}
+                  </select>
                 </div>
 
                 <div>

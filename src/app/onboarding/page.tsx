@@ -113,7 +113,6 @@ export default function OnboardingPage() {
         car_number: carNumber,
         make: carMake,
         model: carModel,
-        status: "Pending"
     });
     setLoading(false);
     // Even if it fails (e.g. table not ready), move to Complete
