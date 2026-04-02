@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useCallback } from "react";
 import Link from "next/link";
 import { LayoutDashboard, CarFront, History, Settings, Menu, X, LogOut } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
@@ -15,40 +15,34 @@ const navItems = [
 
 export default function DashboardLayout({ children }: { children: React.ReactNode }) {
   const [sidebarOpen, setSidebarOpen] = useState(false);
-  const [profile, setProfile] = useState<{ full_name?: string; phone?: string; } | null>(null);
-  const supabase = createClient();
+  const [profile, setProfile] = useState<{ full_name?: string; phone?: string; email?: string } | null>(null);
+
+  const fetchProfile = useCallback(async () => {
+    const supabase = createClient();
+    const { data: { session } } = await supabase.auth.getSession();
+    if (session) {
+      const { data } = await supabase.from('profiles').select('full_name, phone, email').eq('id', session.user.id).single();
+      if (data) {
+        setProfile(data);
+      } else {
+        // Profile row might not exist yet — show email from auth
+        setProfile({ full_name: session.user.user_metadata?.full_name || '', email: session.user.email || '', phone: '' });
+      }
+    }
+  }, []);
 
   useEffect(() => {
-    supabase.auth.getSession().then(async ({ data: { session } }) => {
-      if (session) {
-         const { data } = await supabase.from('profiles').select('*').eq('id', session.user.id).single();
-         if (data) setProfile(data);
-      }
-    });
-
-    const { data: { subscription } } = supabase.auth.onAuthStateChange(async (_event, session) => {
-      if (session) {
-         const { data } = await supabase.from('profiles').select('*').eq('id', session.user.id).single();
-         if (data) setProfile(data);
-      } else {
-         setProfile(null);
-         window.location.href = '/auth/login';
-      }
-    });
-
-    return () => subscription.unsubscribe();
-  }, [supabase]);
+    fetchProfile();
+  }, [fetchProfile]);
 
   const handleLogout = async () => {
-    try {
-      await supabase.auth.signOut();
-    } catch (e) {
-      console.error("Sign out error", e);
-    } finally {
-      localStorage.clear();
-      sessionStorage.clear();
-      window.location.href = '/auth/login';
-    }
+    const supabase = createClient();
+    await supabase.auth.signOut({ scope: 'local' });
+    // Clear all storage to ensure no stale state
+    localStorage.clear();
+    sessionStorage.clear();
+    // Force full page reload to login — bypasses any client-side caching
+    window.location.replace('/auth/login');
   };
 
   return (
@@ -98,21 +92,26 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
         </nav>
 
         <div className="p-4 border-t border-gray-100">
-          <div className="flex items-center gap-3 px-4 py-3 bg-gray-50 rounded-xl mb-4">
+          {/* Clicking the profile card takes user to settings where they can edit their profile */}
+          <a href="/dashboard?tab=settings" className="flex items-center gap-3 px-4 py-3 bg-gray-50 rounded-xl mb-4 hover:bg-gray-100 transition-colors cursor-pointer">
             <div className="w-10 h-10 rounded-full bg-secondary text-white flex items-center justify-center font-bold">
-              {profile?.full_name?.charAt(0) || "U"}
+              {profile?.full_name?.charAt(0)?.toUpperCase() || "U"}
             </div>
             <div className="flex-1 min-w-0">
               <p className="text-sm font-semibold tracking-tight text-gray-900 truncate">
-                {profile?.full_name || "User"}
+                {profile?.full_name?.split(' ')[0] || "User"}
               </p>
               <p className="text-xs text-gray-500 font-medium truncate">
-                {profile?.phone || "No phone"}
+                {profile?.phone || profile?.email || "Set up profile"}
               </p>
             </div>
-          </div>
+          </a>
           
-          <button onClick={handleLogout} className="flex w-full items-center gap-3 px-4 py-3 rounded-xl font-medium text-red-600 hover:bg-red-50 transition-colors">
+          <button 
+            onClick={handleLogout} 
+            type="button"
+            className="flex w-full items-center gap-3 px-4 py-3 rounded-xl font-medium text-red-600 hover:bg-red-50 transition-colors"
+          >
             <LogOut className="w-5 h-5 opacity-70" />
             Sign out
           </button>

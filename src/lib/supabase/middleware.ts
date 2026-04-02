@@ -65,9 +65,19 @@ export async function updateSession(request: NextRequest) {
     return NextResponse.redirect(new URL('/auth/login', request.url))
   }
 
-  // Redirect away from auth pages if user is logged in
+  // Only redirect away from auth pages if user is logged in AND has completed profile
+  // This prevents the middleware from blocking sign-out redirects to /auth/login
   if (isAuthPage && session) {
-    return NextResponse.redirect(new URL('/dashboard', request.url))
+    // Check if user has a completed profile before redirecting
+    const { data: profile } = await supabase
+      .from('profiles')
+      .select('profile_completed')
+      .eq('id', session.user.id)
+      .single()
+
+    if (profile?.profile_completed) {
+      return NextResponse.redirect(new URL('/dashboard', request.url))
+    }
   }
 
   return response

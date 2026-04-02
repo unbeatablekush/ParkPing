@@ -1,40 +1,44 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useCallback } from "react";
 import Link from "next/link";
 import { Button } from "@/components/ui/Button";
 import { Menu, X } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
 import { createClient } from "@/lib/supabase/client";
+import type { Session } from "@supabase/supabase-js";
 
 export function Navbar() {
   const [isOpen, setIsOpen] = useState(false);
   const [isAuth, setIsAuth] = useState(false);
   const [userName, setUserName] = useState("");
 
-  useEffect(() => {
+  const checkAuth = useCallback(async () => {
     const supabase = createClient();
-    
-    supabase.auth.getSession().then(async ({ data: { session } }) => {
-      setIsAuth(!!session);
-      if (session) {
-         const { data } = await supabase.from('profiles').select('full_name').eq('id', session.user.id).single();
-         if (data?.full_name) setUserName(data.full_name);
-      }
-    });
+    const { data: { session } } = await supabase.auth.getSession();
+    setIsAuth(!!session);
+    if (session) {
+      const { data } = await supabase.from('profiles').select('full_name').eq('id', session.user.id).single();
+      if (data?.full_name) setUserName(data.full_name.split(' ')[0]);
+    }
+  }, []);
 
-    const { data: { subscription } } = supabase.auth.onAuthStateChange(async (_event, session) => {
+  useEffect(() => {
+    checkAuth();
+
+    const supabase = createClient();
+    const { data: { subscription } } = supabase.auth.onAuthStateChange(async (_event: string, session: Session | null) => {
       setIsAuth(!!session);
       if (session) {
-         const { data } = await supabase.from('profiles').select('full_name').eq('id', session.user.id).single();
-         if (data?.full_name) setUserName(data.full_name);
+        const { data } = await supabase.from('profiles').select('full_name').eq('id', session.user.id).single();
+        if (data?.full_name) setUserName(data.full_name.split(' ')[0]);
       } else {
-         setUserName("");
+        setUserName("");
       }
     });
 
     return () => subscription.unsubscribe();
-  }, []);
+  }, [checkAuth]);
 
   const navLinks = [
     { name: "Home", href: "/" },

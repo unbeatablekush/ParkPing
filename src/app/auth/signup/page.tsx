@@ -69,9 +69,17 @@ export default function SignupPage() {
 
       if (error) throw error;
       
-      // Check if they are a returning user who already completed the profile
+      // Get the session that was just created
       const { data: { session } } = await supabase.auth.getSession();
       if (session) {
+         // Immediately save the phone and email into the profiles table
+         await supabase.from('profiles').upsert({
+           id: session.user.id,
+           email: email,
+           phone: phone,
+         }, { onConflict: 'id' });
+
+         // Check if they are a returning user who already completed the profile
          const { data: profile } = await supabase.from('profiles').select('profile_completed').eq('id', session.user.id).single();
          if (profile?.profile_completed) {
             toast("Successfully logged in!", "success");

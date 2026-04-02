@@ -1,7 +1,6 @@
 "use client";
 
-import { useState, useEffect } from "react";
-
+import { useState, useEffect, useCallback } from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/Card";
 import { Button } from "@/components/ui/Button";
 import { useToast } from "@/components/ui/ToastProvider";
@@ -30,7 +29,6 @@ export default function DashboardContent({ tab }: DashboardContentProps) {
   const [email, setEmail] = useState("");
   const [loading, setLoading] = useState(false);
   const toast = useToast();
-  const supabase = createClient();
   const [vehicles, setVehicles] = useState<Vehicle[]>([]);
   
   // Settings Form State
@@ -40,73 +38,112 @@ export default function DashboardContent({ tab }: DashboardContentProps) {
   const [dob, setDob] = useState("");
   const [phone, setPhone] = useState("");
 
-  useEffect(() => {
-    supabase.auth.getSession().then(async ({ data: { session } }) => {
-      if (session) {
-         setEmail(session.user.email || "");
-         const { data } = await supabase.from('profiles').select('*').eq('id', session.user.id).single();
-         if (data) {
-             setProfile(data);
-             setFullName(data.full_name || "");
-             setAge(data.age?.toString() || "");
-             setGender(data.gender || "");
-             setDob(data.date_of_birth || "");
-             setPhone(data.phone || "");
-         }
-
-         const { data: vehiclesData } = await supabase.from('vehicles').select('*').eq('user_id', session.user.id);
-         if (vehiclesData) setVehicles(vehiclesData);
+  const fetchData = useCallback(async () => {
+    const supabase = createClient();
+    const { data: { session } } = await supabase.auth.getSession();
+    if (session) {
+      setEmail(session.user.email || "");
+      const { data } = await supabase.from('profiles').select('*').eq('id', session.user.id).single();
+      if (data) {
+        setProfile(data);
+        setFullName(data.full_name || "");
+        setAge(data.age?.toString() || "");
+        setGender(data.gender || "");
+        setDob(data.date_of_birth || "");
+        setPhone(data.phone || "");
       }
-    });
-  }, [supabase]);
+
+      const { data: vehiclesData } = await supabase.from('vehicles').select('*').eq('user_id', session.user.id);
+      if (vehiclesData) setVehicles(vehiclesData);
+    }
+  }, []);
+
+  useEffect(() => {
+    fetchData();
+  }, [fetchData]);
 
   const handleUpdateProfile = async (e: React.FormEvent) => {
-     e.preventDefault();
-     setLoading(true);
-     const { data: { session } } = await supabase.auth.getSession();
-     if (!session) return;
+    e.preventDefault();
+    setLoading(true);
+    const supabase = createClient();
+    const { data: { session } } = await supabase.auth.getSession();
+    if (!session) {
+      toast("Session expired. Please log in again.", "error");
+      setLoading(false);
+      return;
+    }
      
-     const { error } = await supabase.from('profiles').upsert({
-        id: session.user.id,
-        full_name: fullName,
-        age: parseInt(age) || null,
-        gender,
-        date_of_birth: dob,
-        phone
-     }, { onConflict: 'id' });
+    const { error } = await supabase.from('profiles').upsert({
+      id: session.user.id,
+      full_name: fullName,
+      age: parseInt(age) || null,
+      gender: gender || null,
+      date_of_birth: dob || null,
+      phone: phone || null,
+      email: session.user.email,
+      profile_completed: true,
+    }, { onConflict: 'id' });
      
-     setLoading(false);
-     if (error) {
-        toast("Failed to update profile", "error");
-     } else {
-        toast("Profile updated successfully", "success");
-        // re-fetch to update progress bar dynamically
-        const { data } = await supabase.from('profiles').select('*').eq('id', session.user.id).single();
-        if (data) setProfile(data);
-     }
+    if (error) {
+      toast("Failed to update profile: " + error.message, "error");
+    } else {
+      toast("Profile updated successfully!", "success");
+      // Re-fetch to update progress bar and sidebar
+      const { data } = await supabase.from('profiles').select('*').eq('id', session.user.id).single();
+      if (data) {
+        setProfile(data);
+      }
+    }
+    setLoading(false);
   };
 
   const handleResetPassword = async () => {
     if (!email) return;
     setLoading(true);
+    const supabase = createClient();
     const { error } = await supabase.auth.resetPasswordForEmail(email);
     setLoading(false);
     if (error) {
-        toast(error.message, "error");
+      toast(error.message, "error");
     } else {
-        toast("Check your email for the password reset link", "success");
+      toast("Check your email for the password reset link", "success");
     }
   };
 
+  const handleDeleteAccount = async () => {
+    const confirmed = window.confirm("Are you sure you want to delete your account? This action is irreversible and will void all your QR stickers.");
+    if (!confirmed) return;
+    
+    setLoading(true);
+    const supabase = createClient();
+    const { data: { session } } = await supabase.auth.getSession();
+    if (!session) {
+      toast("Session expired.", "error");
+      setLoading(false);
+      return;
+    }
+
+    // Delete vehicles and profile (cascade should handle profile via auth.users FK)
+    await supabase.from('vehicles').delete().eq('user_id', session.user.id);
+    await supabase.from('profiles').delete().eq('id', session.user.id);
+    
+    // Sign out
+    await supabase.auth.signOut({ scope: 'local' });
+    localStorage.clear();
+    sessionStorage.clear();
+    toast("Account data deleted. Redirecting...", "success");
+    setTimeout(() => { window.location.replace('/auth/login'); }, 1000);
+  };
+
   const calcCompletion = () => {
-      if (!profile) return 0;
-      let count = 0;
-      if (profile.full_name) count++;
-      if (profile.age) count++;
-      if (profile.gender) count++;
-      if (profile.date_of_birth) count++;
-      if (profile.phone) count++;
-      return (count / 5) * 100;
+    if (!profile) return 0;
+    let count = 0;
+    if (profile.full_name) count++;
+    if (profile.age) count++;
+    if (profile.gender) count++;
+    if (profile.date_of_birth) count++;
+    if (profile.phone) count++;
+    return (count / 5) * 100;
   };
 
   const completionPercent = calcCompletion();
@@ -331,7 +368,7 @@ export default function DashboardContent({ tab }: DashboardContentProps) {
         </CardHeader>
         <CardContent>
            <p className="text-sm text-gray-500 mb-4">Deleting your account will void your active QR stickers instantly.</p>
-           <Button variant="danger">Delete Account</Button>
+           <Button variant="danger" onClick={handleDeleteAccount} isLoading={loading}>Delete Account</Button>
         </CardContent>
       </Card>
     </div>
