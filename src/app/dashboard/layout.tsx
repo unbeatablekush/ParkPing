@@ -40,8 +40,15 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
   }, [supabase]);
 
   const handleLogout = async () => {
-    await supabase.auth.signOut();
-    window.location.href = '/auth/login';
+    try {
+      await supabase.auth.signOut();
+    } catch (e) {
+      console.error("Sign out error", e);
+    } finally {
+      localStorage.clear();
+      sessionStorage.clear();
+      window.location.href = '/auth/login';
+    }
   };
 
   return (

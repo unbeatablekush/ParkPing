@@ -66,13 +66,14 @@ export default function DashboardContent({ tab }: DashboardContentProps) {
      const { data: { session } } = await supabase.auth.getSession();
      if (!session) return;
      
-     const { error } = await supabase.from('profiles').update({
+     const { error } = await supabase.from('profiles').upsert({
+        id: session.user.id,
         full_name: fullName,
         age: parseInt(age) || null,
         gender,
         date_of_birth: dob,
         phone
-     }).eq('id', session.user.id);
+     }, { onConflict: 'id' });
      
      setLoading(false);
      if (error) {

@@ -61,14 +61,15 @@ export default function OnboardingPage() {
     }
     setLoading(true);
     
-    // Save to profiles and users metadata
-    const { error } = await supabase.from('profiles').update({
+    // Save to profiles and users metadata using upsert in case trigger failed
+    const { error } = await supabase.from('profiles').upsert({
+        id: userId,
         full_name: fullName,
         age: parseInt(age),
         gender,
         date_of_birth: dob,
         phone
-    }).eq("id", userId);
+    }, { onConflict: 'id' });
     
     // Also update auth.users
     await supabase.auth.updateUser({
@@ -98,7 +99,7 @@ export default function OnboardingPage() {
 
   const completeOnboarding = async () => {
       setLoading(true);
-      await supabase.from('profiles').update({ profile_completed: true }).eq('id', userId);
+      await supabase.from('profiles').upsert({ id: userId, profile_completed: true }, { onConflict: 'id' });
       setLoading(false);
       setStep(4);
   };
