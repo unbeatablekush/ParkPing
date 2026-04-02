@@ -8,6 +8,7 @@ import { Button } from "@/components/ui/Button";
 import { Eye, EyeOff, CheckCircle2 } from "lucide-react";
 import { useToast } from "@/components/ui/ToastProvider";
 import { createClient } from "@/lib/supabase/client";
+import { formatCarNumber } from "@/lib/utils";
 
 export default function OnboardingPage() {
   const [step, setStep] = useState(1);
@@ -245,7 +246,7 @@ export default function OnboardingPage() {
                   <form onSubmit={handleStep3} className="space-y-5">
                     <div>
                         <label className="block text-sm font-medium text-gray-700 mb-1">Car Number</label>
-                        <input required type="text" value={carNumber} onChange={e => setCarNumber(e.target.value.toUpperCase())} placeholder="MH 01 AB 1234" className="w-full rounded-xl border border-gray-200 px-4 py-3 outline-none focus:ring-2 focus:ring-primary focus:border-primary uppercase" />
+                        <input required type="text" value={carNumber} onChange={e => setCarNumber(formatCarNumber(e.target.value))} placeholder="MH 01 AB 1234" maxLength={13} className="w-full rounded-xl border border-gray-200 px-4 py-3 outline-none focus:ring-2 focus:ring-primary focus:border-primary uppercase text-lg font-bold tracking-wider" />
                     </div>
                     <div className="grid grid-cols-2 gap-4">
                         <div>
