@@ -47,7 +47,7 @@ export default function LandingPage() {
                   Scan. Ping. Move. ParkPing lets you anonymously contact any blocked car owner in seconds.
                 </p>
                 <div className="flex flex-col sm:flex-row gap-4">
-                  <Link href="/order">
+                  <Link href="/auth/login">
                     <Button size="lg" className="w-full sm:w-auto h-14 text-lg">
                       Get Your QR Sticker <ArrowRight className="w-5 h-5 ml-2" />
                     </Button>
@@ -60,7 +60,7 @@ export default function LandingPage() {
                 </div>
 
                 <div className="mt-6 flex justify-center sm:justify-start">
-                  <Link href="/auth" className="text-gray-500 hover:text-primary font-medium transition-colors text-base flex items-center gap-1">
+                  <Link href="/auth/login" className="text-gray-500 hover:text-primary font-medium transition-colors text-base flex items-center gap-1">
                     Already have an account? Login <ArrowRight className="w-4 h-4" />
                   </Link>
                 </div>
@@ -246,7 +246,7 @@ export default function LandingPage() {
                     ))}
                   </ul>
                   
-                  <Link href="/order" className="mt-auto">
+                  <Link href="/auth/login" className="mt-auto">
                     <Button variant="outline" className="w-full h-12 text-lg border-2">Order Now</Button>
                   </Link>
                 </CardContent>
@@ -279,7 +279,7 @@ export default function LandingPage() {
                     ))}
                   </ul>
 
-                  <Link href="/auth" className="mt-auto">
+                  <Link href="/auth/login" className="mt-auto">
                     <Button variant="primary" className="w-full h-12 text-lg">Subscribe Now</Button>
                   </Link>
                 </CardContent>
