@@ -8,6 +8,7 @@ import { Card, CardContent } from "@/components/ui/Card";
 import { Button } from "@/components/ui/Button";
 import { CreditCard, Truck, ShieldCheck, Mail, MapPin } from "lucide-react";
 import { useToast } from "@/components/ui/ToastProvider";
+import { createClient } from "@/lib/supabase/client";
 
 export default function OrderPage() {
   const toast = useToast();
@@ -21,20 +22,44 @@ export default function OrderPage() {
     pincode: "",
   });
 
-  const handlePayment = (e: React.FormEvent) => {
+  const handlePayment = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!form.name || !form.phone || !form.address || !form.pincode) {
       return toast("Please complete your delivery details.", "error");
     }
+    if (form.pincode.length !== 6) {
+      return toast("Please enter a valid 6-digit PIN code.", "error");
+    }
 
     setLoading(true);
-    // Simulate Razorpay checkout
-    setTimeout(() => {
+    const supabase = createClient();
+    const { data: { session } } = await supabase.auth.getSession();
+
+    if (!session) {
+      toast("Please log in to place an order.", "error");
       setLoading(false);
-      toast("Payment Successful!", "success");
-      // Redirect to a dummy success layout
+      router.push("/auth/login");
+      return;
+    }
+
+    const { error } = await supabase.from('orders').insert({
+      user_id: session.user.id,
+      full_name: form.name,
+      phone: form.phone,
+      address: form.address,
+      pincode: form.pincode,
+      amount: 198,
+      payment_status: 'pending',
+    });
+
+    setLoading(false);
+
+    if (error) {
+      toast("Failed to place order: " + error.message, "error");
+    } else {
+      toast("Order placed successfully! 🎉", "success");
       router.push("/dashboard");
-    }, 2000);
+    }
   };
 
   return (
