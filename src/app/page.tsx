@@ -47,6 +47,11 @@ export default function LandingPage() {
                   Scan. Ping. Move. ParkPing lets you anonymously contact any blocked car owner in seconds.
                 </p>
                 <div className="flex flex-col sm:flex-row gap-4">
+                  <Link href="/scan/start">
+                    <Button size="lg" className="w-full sm:w-auto h-14 text-lg">
+                      Scan a QR <ArrowRight className="w-5 h-5 ml-2" />
+                    </Button>
+                  </Link>
                   <Link href="/auth/login">
                     <Button size="lg" className="w-full sm:w-auto h-14 text-lg">
                       Get Your QR Sticker <ArrowRight className="w-5 h-5 ml-2" />
