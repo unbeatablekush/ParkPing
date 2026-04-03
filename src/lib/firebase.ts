@@ -9,15 +9,34 @@ const firebaseConfig = {
   appId: process.env.NEXT_PUBLIC_FIREBASE_APP_ID
 }
 
-const app = getApps().length === 0 ? initializeApp(firebaseConfig) : getApps()[0]
+const missingKeys = Object.entries(firebaseConfig)
+  .filter(([, value]) => !value)
+  .map(([key]) => key)
+
+if (missingKeys.length > 0) {
+  const errorMessage = `[Firebase] missing required environment variables: ${missingKeys.join(', ')}`
+  if (typeof window === 'undefined') {
+    // On server-side, fail fast so you can catch config errors early.
+    throw new Error(errorMessage)
+  }
+  // On client-side, keep app null and log.
+  console.error(errorMessage)
+}
+
+const app =
+  missingKeys.length === 0 && getApps().length === 0
+    ? initializeApp(firebaseConfig)
+    : getApps().length > 0
+    ? getApps()[0]
+    : null
 
 let messaging: Messaging | null = null
 
-if (typeof window !== 'undefined') {
+if (app && typeof window !== 'undefined') {
   try {
     messaging = getMessaging(app)
-  } catch {
-    console.warn('Firebase messaging not supported in this browser')
+  } catch (err) {
+    console.warn('Firebase messaging not supported in this browser', err)
   }
 }
 
