@@ -129,7 +129,21 @@ export async function POST(
 
     if (scanError || !scanLog) {
       console.error("scan_logs create error:", scanError, "body:", payload);
-      return NextResponse.json({ error: "Failed to create scan log" }, { status: 500 });
+      return NextResponse.json(
+        {
+          error: "Failed to create scan log",
+          details: scanError?.message || JSON.stringify(scanError) || "unknown",
+          scanData: {
+            qr_id: qrCode.id,
+            scanner_phone_hash: phoneHash,
+            scanner_name: scannerName || null,
+            contact_method: normalizedContactMethod,
+            location_city: city,
+            resolution_status: "pending",
+          },
+        },
+        { status: 500 }
+      );
     }
 
     const { data: alert, error: alertError } = await supabase
@@ -144,7 +158,13 @@ export async function POST(
 
     if (alertError || !alert) {
       console.error("alerts create error:", alertError, "body:", payload);
-      return NextResponse.json({ error: "Failed to create alert" }, { status: 500 });
+      return NextResponse.json(
+        {
+          error: "Failed to create alert",
+          details: alertError?.message || JSON.stringify(alertError) || "unknown",
+        },
+        { status: 500 }
+      );
     }
 
     const { data: ownerProfile, error: ownerProfileError } = await supabase
