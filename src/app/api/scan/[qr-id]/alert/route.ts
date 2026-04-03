@@ -3,9 +3,16 @@ import { createClient } from "@supabase/supabase-js";
 import crypto from "crypto";
 
 // Use service role to bypass RLS
+const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
+const supabaseServiceRoleKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
+
+if (!supabaseUrl || !supabaseServiceRoleKey) {
+  console.error("Supabase envs missing", { supabaseUrl, supabaseServiceRoleKey });
+}
+
 const supabase = createClient(
-  process.env.NEXT_PUBLIC_SUPABASE_URL!,
-  process.env.SUPABASE_SERVICE_ROLE_KEY!
+  supabaseUrl || "",
+  supabaseServiceRoleKey || ""
 );
 
 function hashPhone(phone: string): string {
@@ -174,8 +181,12 @@ export async function POST(
       scanId: scanLog.id,
       cooldownEnds,
     });
-  } catch (err) {
+  } catch (err: unknown) {
     console.error("Alert API error:", err, "params:", params);
-    return NextResponse.json({ error: "Internal server error" }, { status: 500 });
+    const message = err instanceof Error ? err.message : String(err);
+    return NextResponse.json(
+      { error: "Internal server error", details: message },
+      { status: 500 }
+    );
   }
 }
