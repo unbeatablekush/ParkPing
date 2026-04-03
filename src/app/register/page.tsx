@@ -44,13 +44,14 @@ export default function RegisterVehiclePage() {
        return;
     }
 
-    // Insert vehicle
+    // Insert vehicle (auto-verify on registration)
     const { data: vehicle, error: vehError } = await supabase.from('vehicles').insert({
         user_id: session.user.id,
         car_number: form.carNumber,
         make: form.make,
         model: form.model,
         color: form.color || null,
+        is_verified: true,
     }).select('id').single();
 
     if (vehError || !vehicle) {
