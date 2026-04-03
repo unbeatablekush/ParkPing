@@ -164,7 +164,15 @@ function ScanContent() {
       <div style={{ textAlign: "center", padding: "48px 24px" }}>
         <div style={{ fontSize: 52, marginBottom: 16 }}>😔</div>
         <h2 style={{ fontSize: 22, fontWeight: 700, color: "#1A1A2E", marginBottom: 8 }}>QR Code Not Found</h2>
-        <p style={{ color: "#999", fontSize: 14, lineHeight: 1.7 }}>This QR code is not registered with ParkPing or may have expired.</p>
+        <p style={{ color: "#999", fontSize: 14, lineHeight: 1.7, marginBottom: 16 }}>
+          This QR code is not registered with ParkPing or may have expired.
+        </p>
+        <p style={{ color: "#777", fontSize: 13, marginBottom: 20 }}>
+          Scanned value: <strong>{code || "(empty)"}</strong>
+        </p>
+        <button onClick={() => router.push("/scan/start")} style={{ width: "100%", borderRadius: 14, border: "none", background: "#FF6B35", color: "#fff", fontSize: 16, fontWeight: 700, padding: "12px 16px", cursor: "pointer" }}>
+          Retry Scan
+        </button>
       </div>
     </div></div>
   );
