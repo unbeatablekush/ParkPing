@@ -39,6 +39,9 @@ export default function DashboardContent({ tab }: DashboardContentProps) {
   const toast = useToast();
   const [vehicles, setVehicles] = useState<Vehicle[]>([]);
   const [qrCodes, setQrCodes] = useState<QRCodeData[]>([]);
+  const [totalScans, setTotalScans] = useState(0);
+  const [alertsReceived, setAlertsReceived] = useState(0);
+  const [callsReceived, setCallsReceived] = useState(0);
   const [alerts, setAlerts] = useState<Array<{id: string; scan_id: string; alert_type: string; status: string; eta_minutes: number | null; owner_response: string | null; created_at: string; vehicle_make?: string; vehicle_model?: string}>>([]);
   const [respondingTo, setRespondingTo] = useState<string | null>(null);
   const [showEtaPicker, setShowEtaPicker] = useState(false);
@@ -88,9 +91,15 @@ export default function DashboardContent({ tab }: DashboardContentProps) {
         if (qrCodes && qrCodes.length > 0) {
           const qrIds = qrCodes.map((q: { id: string }) => q.id);
           const { data: scanLogs } = await supabase.from('scan_logs').select('id, qr_id').in('qr_id', qrIds);
+          setTotalScans(scanLogs?.length || 0);
           if (scanLogs && scanLogs.length > 0) {
             const scanIds = scanLogs.map((s: { id: string }) => s.id);
             const { data: alertsData } = await supabase.from('alerts').select('*').in('scan_id', scanIds).order('created_at', { ascending: false });
+            setAlertsReceived(alertsData?.length || 0);
+
+            const { data: callsData } = await supabase.from('calls').select('id').in('scan_id', scanIds);
+            setCallsReceived(callsData?.length || 0);
+
             if (alertsData) {
               // Enrich alerts with vehicle info
               const enriched = alertsData.map((a: { scan_id: string; [key: string]: unknown }) => {
@@ -206,9 +215,9 @@ export default function DashboardContent({ tab }: DashboardContentProps) {
 
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
         {[
-          { label: "Total Scans", value: 0 },
-          { label: "Calls Received", value: 0 },
-          { label: "Alerts Received", value: 0 },
+          { label: "Total Scans", value: totalScans },
+          { label: "Calls Received", value: callsReceived },
+          { label: "Alerts Received", value: alertsReceived },
           { label: "Cars Registered", value: vehicles.length },
         ].map((stat, i) => (
           <Card key={i} className="border-0 shadow-sm border-b-[3px] border-b-primary/20">

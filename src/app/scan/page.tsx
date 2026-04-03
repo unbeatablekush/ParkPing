@@ -16,10 +16,13 @@ function ScanContent() {
   const router = useRouter();
   const code = searchParams.get("code") || "";
 
-  const [page, setPage] = useState<"loading" | "notfound" | "nocode" | "form">("loading");
+  const [page, setPage] = useState<"loading" | "notfound" | "nocode" | "form" | "actions">("loading");
   const [vehicle, setVehicle] = useState<VehicleData | null>(null);
   const [name, setName] = useState("");
   const [email, setEmail] = useState("");
+  const [alertLoading, setAlertLoading] = useState(false);
+  const [alertSent, setAlertSent] = useState(false);
+  const [cooldownSec, setCooldownSec] = useState(0);
 
   // If no code in URL
   useEffect(() => {
@@ -27,6 +30,13 @@ function ScanContent() {
       setPage("nocode");
       return;
     }
+
+    const savedName = sessionStorage.getItem("scanner_name");
+    const savedEmail = sessionStorage.getItem("scanner_email");
+
+    if (savedName) setName(savedName);
+    if (savedEmail) setEmail(savedEmail);
+
     // Fetch vehicle data from API
     fetch(`/api/scan/${code}/info`)
       .then((r) => {
@@ -35,7 +45,11 @@ function ScanContent() {
       })
       .then((d) => {
         setVehicle(d);
-        setPage("form");
+        if (savedName && savedEmail) {
+          setPage("actions");
+        } else {
+          setPage("form");
+        }
       })
       .catch(() => setPage("notfound"));
   }, [code]);
@@ -45,8 +59,60 @@ function ScanContent() {
     if (!name.trim() || !email.includes("@")) return;
     sessionStorage.setItem("scanner_name", name.trim());
     sessionStorage.setItem("scanner_email", email);
-    sessionStorage.setItem("vehicle_data", JSON.stringify(vehicle));
-    router.push(`/scan/${code}/connect`);
+    setPage("actions");
+  };
+
+  useEffect(() => {
+    if (cooldownSec <= 0) return;
+    const timer = setInterval(() => setCooldownSec((c) => c - 1), 1000);
+    return () => clearInterval(timer);
+  }, [cooldownSec]);
+
+  const fmtCooldown = (s: number) => `${Math.floor(s / 60)}:${(s % 60).toString().padStart(2, "0")}`;
+
+  const sendAlert = async () => {
+    if (alertLoading || cooldownSec > 0) return;
+    setAlertLoading(true);
+
+    try {
+      const res = await fetch(`/api/scan/${code}/alert`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ scannerPhone: email, scannerName: name, contactMethod: "alert" }),
+      });
+      const data = await res.json();
+      if (!res.ok) {
+        alert(data.error || "Failed to send alert");
+        setAlertLoading(false);
+        return;
+      }
+
+      setAlertSent(true);
+      setCooldownSec(240);
+      setAlertLoading(false);
+      router.push(`/scan/waiting?alertId=${data.alertId}&scanId=${data.scanId}`);
+    } catch {
+      alert("Something went wrong. Please try again.");
+      setAlertLoading(false);
+    }
+  };
+
+  const openChat = async () => {
+    try {
+      const res = await fetch(`/api/scan/${code}/alert`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ scannerPhone: email, scannerName: name, contactMethod: "chat" }),
+      });
+      const data = await res.json();
+      if (res.ok && data.scanId) {
+        router.push(`/chat/${data.scanId}?role=scanner`);
+        return;
+      }
+    } catch {
+      // fallback
+    }
+    alert("Unable to start chat. Please try again.");
   };
 
   // ─── SHARED HEADER ──────────────────────────
@@ -83,7 +149,10 @@ function ScanContent() {
       <div style={{ textAlign: "center", padding: "48px 24px" }}>
         <div style={{ fontSize: 52, marginBottom: 16 }}>📷</div>
         <h2 style={{ fontSize: 22, fontWeight: 700, color: "#1A1A2E", marginBottom: 8 }}>Scan a ParkPing QR Code</h2>
-        <p style={{ color: "#999", fontSize: 14, lineHeight: 1.7 }}>Point your camera at a ParkPing sticker on a car windshield to get started.</p>
+        <p style={{ color: "#999", fontSize: 14, lineHeight: 1.7, marginBottom: 24 }}>Start by entering your details and scanning a car QR sticker.</p>
+        <button onClick={() => router.push("/scan/start")} style={{ width: "100%", borderRadius: 14, border: "none", background: "#FF6B35", color: "#fff", fontSize: 16, fontWeight: 700, padding: "12px 16px", cursor: "pointer" }}>
+          Scan a QR
+        </button>
       </div>
     </div></div>
   );
@@ -136,6 +205,38 @@ function ScanContent() {
     </div></div>
   );
 
+  // ─── ACTIONS ────────────────────────────────
+  if (page === "actions") return (
+    <div style={S.page}><div style={S.card}>
+      <Header />
+      <VehicleBanner />
+      <div style={{ padding: "28px 24px" }}>
+        <h3 style={{ fontSize: 19, fontWeight: 700, textAlign: "center", color: "#1A1A2E", marginBottom: 4 }}>Contact the Owner</h3>
+        <p style={{ fontSize: 13, color: "#999", textAlign: "center", marginBottom: 28 }}>Choose how you&apos;d like to reach them</p>
+
+        <button
+          onClick={sendAlert}
+          disabled={alertLoading || cooldownSec > 0}
+          style={{ ...S.orangeBtn, height: 72, fontSize: 18, marginBottom: 14, opacity: (alertLoading || cooldownSec > 0) ? 0.6 : 1 }}
+        >
+          <div>{alertLoading ? "Sending..." : cooldownSec > 0 ? `⏳ Next alert in ${fmtCooldown(cooldownSec)}` : "🔔 Send Alert"}</div>
+          {!alertLoading && cooldownSec <= 0 && <div style={{ fontSize: 12, opacity: 0.8, marginTop: 4 }}>Instantly notifies the car owner</div>}
+        </button>
+
+        <button onClick={openChat} style={{ ...S.navyBtn, height: 72, fontSize: 18 }}>
+          <div>💬 Send Message</div>
+          <div style={{ fontSize: 12, opacity: 0.8, marginTop: 4 }}>Chat anonymously with the owner</div>
+        </button>
+
+        {alertSent && (
+          <div style={{ marginTop: 20, padding: "14px 18px", background: "#f0fdf4", borderRadius: 14, border: "1px solid #bbf7d0" }}>
+            <p style={{ fontSize: 13, color: "#166534", fontWeight: 600 }}>✅ Alert sent! The owner has been notified.</p>
+          </div>
+        )}
+      </div>
+      <p style={S.footer}>🛡️ Misuse is strictly logged and punishable</p>
+    </div></div>
+  );
 
 }
 
