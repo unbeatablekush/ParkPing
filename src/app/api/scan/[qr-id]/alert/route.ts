@@ -16,23 +16,46 @@ export async function POST(
   request: NextRequest,
   { params }: { params: { "qr-id": string } }
 ) {
+  const qrString = params["qr-id"];
+
+  if (!qrString || typeof qrString !== "string") {
+    return NextResponse.json({ error: "Invalid QR code" }, { status: 400 });
+  }
+
+  let payload: any;
   try {
-    const { scannerPhone, scannerName, contactMethod } = await request.json();
-    const qrString = params["qr-id"];
+    payload = await request.json();
+  } catch (err) {
+    console.error("Alert API invalid JSON body:", err);
+    return NextResponse.json({ error: "Invalid JSON payload" }, { status: 400 });
+  }
 
-    if (!scannerPhone) {
-      return NextResponse.json({ error: "Phone number required" }, { status: 400 });
-    }
+  const scannerPhone = String(payload?.scannerPhone || "").trim();
+  const scannerName = payload?.scannerName ? String(payload.scannerName).trim() : null;
+  const contactMethod = payload?.contactMethod ? String(payload.contactMethod).trim() : "alert";
 
-    const phoneHash = hashPhone(scannerPhone);
+  if (!scannerPhone) {
+    return NextResponse.json({ error: "Phone number required" }, { status: 400 });
+  }
 
-    // Check cooldown: max 3 alerts per hour from this phone
+  const normalizedContactMethod = ["alert", "call", "chat"].includes(contactMethod)
+    ? contactMethod
+    : "alert";
+
+  const phoneHash = hashPhone(scannerPhone);
+
+  try {
     const oneHourAgo = new Date(Date.now() - 60 * 60 * 1000).toISOString();
-    const { count } = await supabase
+    const { count, error: countError } = await supabase
       .from("scan_logs")
       .select("*", { count: "exact", head: true })
       .eq("scanner_phone_hash", phoneHash)
       .gte("scanned_at", oneHourAgo);
+
+    if (countError) {
+      console.error("scan_logs count error:", countError);
+      return NextResponse.json({ error: "Unable to check cooldown" }, { status: 500 });
+    }
 
     if ((count || 0) >= 3) {
       return NextResponse.json(
@@ -41,39 +64,45 @@ export async function POST(
       );
     }
 
-    // Look up the QR code
-    const { data: qrCode } = await supabase
+    const { data: qrCode, error: qrError } = await supabase
       .from("qr_codes")
       .select("id, vehicle_id")
       .eq("qr_code_string", qrString)
       .single();
 
+    if (qrError) {
+      console.error("qr_codes lookup error:", qrError);
+      return NextResponse.json({ error: "QR code lookup failed" }, { status: 500 });
+    }
+
     if (!qrCode) {
       return NextResponse.json({ error: "QR code not found" }, { status: 404 });
     }
 
-    // Get vehicle details
-    const { data: vehicle } = await supabase
+    const { data: vehicle, error: vehicleError } = await supabase
       .from("vehicles")
       .select("id, user_id, make, model")
       .eq("id", qrCode.vehicle_id)
       .single();
 
+    if (vehicleError) {
+      console.error("vehicle lookup error:", vehicleError);
+      return NextResponse.json({ error: "Vehicle lookup failed" }, { status: 500 });
+    }
+
     if (!vehicle) {
       return NextResponse.json({ error: "Vehicle not found" }, { status: 404 });
     }
 
-    // Get browser geolocation city (from request header or default)
     const city = request.headers.get("x-city") || "Unknown";
 
-    // Create scan log
     const { data: scanLog, error: scanError } = await supabase
       .from("scan_logs")
       .insert({
         qr_id: qrCode.id,
         scanner_phone_hash: phoneHash,
         scanner_name: scannerName || null,
-        contact_method: contactMethod || "alert",
+        contact_method: normalizedContactMethod,
         location_city: city,
         resolution_status: "pending",
       })
@@ -81,10 +110,10 @@ export async function POST(
       .single();
 
     if (scanError || !scanLog) {
+      console.error("scan_logs create error:", scanError, "body:", payload);
       return NextResponse.json({ error: "Failed to create scan log" }, { status: 500 });
     }
 
-    // Create alert
     const { data: alert, error: alertError } = await supabase
       .from("alerts")
       .insert({
@@ -96,20 +125,23 @@ export async function POST(
       .single();
 
     if (alertError || !alert) {
+      console.error("alerts create error:", alertError, "body:", payload);
       return NextResponse.json({ error: "Failed to create alert" }, { status: 500 });
     }
 
-    // Get owner's FCM token
-    const { data: ownerProfile } = await supabase
+    const { data: ownerProfile, error: ownerProfileError } = await supabase
       .from("profiles")
       .select("fcm_token")
       .eq("id", vehicle.user_id)
       .single();
 
-    // Send FCM notification if owner has a token
+    if (ownerProfileError) {
+      console.error("profiles lookup error:", ownerProfileError);
+      // still continue without FCM
+    }
+
     if (ownerProfile?.fcm_token) {
       try {
-        // Dynamic import to avoid loading firebase-admin on client
         const { fcmAdmin } = await import("@/lib/firebase-admin");
         await fcmAdmin.send({
           token: ownerProfile.fcm_token,
@@ -132,7 +164,6 @@ export async function POST(
         });
       } catch (fcmErr) {
         console.error("FCM send error:", fcmErr);
-        // Don't fail the request if FCM fails — alert is still created
       }
     }
 
@@ -144,7 +175,7 @@ export async function POST(
       cooldownEnds,
     });
   } catch (err) {
-    console.error("Alert API error:", err);
+    console.error("Alert API error:", err, "params:", params);
     return NextResponse.json({ error: "Internal server error" }, { status: 500 });
   }
 }
