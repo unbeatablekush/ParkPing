@@ -1,14 +1,15 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { useRouter } from "next/navigation";
 import { motion, AnimatePresence } from "framer-motion";
 import { Card, CardContent } from "@/components/ui/Card";
 import { Button } from "@/components/ui/Button";
-import { Eye, EyeOff, CheckCircle2 } from "lucide-react";
+import { Eye, EyeOff, CheckCircle2, Download } from "lucide-react";
 import { useToast } from "@/components/ui/ToastProvider";
 import { createClient } from "@/lib/supabase/client";
-import { formatCarNumber } from "@/lib/utils";
+import { formatCarNumber, generateQRCodeString, PARKPING_URL } from "@/lib/utils";
+import { QRCodeSVG } from "qrcode.react";
 
 export default function OnboardingPage() {
   const [step, setStep] = useState(1);
@@ -17,6 +18,7 @@ export default function OnboardingPage() {
   const toast = useToast();
   const supabase = createClient();
   const [userId, setUserId] = useState<string | null>(null);
+  const qrRef = useRef<HTMLDivElement>(null);
 
   // Step 1 Data
   const [fullName, setFullName] = useState("");
@@ -34,6 +36,9 @@ export default function OnboardingPage() {
   const [carNumber, setCarNumber] = useState("");
   const [carMake, setCarMake] = useState("");
   const [carModel, setCarModel] = useState("");
+
+  // Step 4 Data — QR code generated after vehicle registration
+  const [qrCodeString, setQrCodeString] = useState<string | null>(null);
 
   useEffect(() => {
     const fetchUser = async () => {
@@ -62,7 +67,6 @@ export default function OnboardingPage() {
     }
     setLoading(true);
     
-    // Save to profiles and users metadata using upsert in case trigger failed
     const { error } = await supabase.from('profiles').upsert({
         id: userId,
         full_name: fullName,
@@ -72,7 +76,6 @@ export default function OnboardingPage() {
         phone
     }, { onConflict: 'id' });
     
-    // Also update auth.users
     await supabase.auth.updateUser({
         data: { full_name: fullName, age: parseInt(age), gender, date_of_birth: dob }
     });
@@ -108,16 +111,62 @@ export default function OnboardingPage() {
   const handleStep3 = async (e: React.FormEvent) => {
     e.preventDefault();
     setLoading(true);
-    // Ideally we would add to vehicles table here
-    await supabase.from('vehicles').insert({
+
+    // Insert vehicle
+    const { data: vehicle, error: vehError } = await supabase.from('vehicles').insert({
         user_id: userId,
         car_number: carNumber,
         make: carMake,
         model: carModel,
+    }).select('id').single();
+
+    if (vehError || !vehicle) {
+      toast("Failed to register vehicle: " + (vehError?.message || "Unknown error"), "error");
+      setLoading(false);
+      return;
+    }
+
+    // Auto-generate QR code record
+    const qrString = generateQRCodeString();
+    const { error: qrError } = await supabase.from('qr_codes').insert({
+      vehicle_id: vehicle.id,
+      qr_code_string: qrString,
+      is_active: true,
+      delivery_status: 'pending',
     });
+
+    if (qrError) {
+      console.error("QR code creation failed:", qrError);
+      // Still proceed — vehicle is registered
+    } else {
+      setQrCodeString(qrString);
+    }
+
     setLoading(false);
-    // Even if it fails (e.g. table not ready), move to Complete
     await completeOnboarding();
+  };
+
+  const handleDownloadQR = () => {
+    if (!qrRef.current) return;
+    const svg = qrRef.current.querySelector('svg');
+    if (!svg) return;
+
+    const canvas = document.createElement('canvas');
+    const ctx = canvas.getContext('2d');
+    const svgData = new XMLSerializer().serializeToString(svg);
+    const img = new Image();
+    
+    canvas.width = 512;
+    canvas.height = 512;
+    
+    img.onload = () => {
+      ctx?.drawImage(img, 0, 0, 512, 512);
+      const link = document.createElement('a');
+      link.download = `parkping-${carNumber.replace(/\s/g, '')}.png`;
+      link.href = canvas.toDataURL('image/png');
+      link.click();
+    };
+    img.src = 'data:image/svg+xml;base64,' + btoa(unescape(encodeURIComponent(svgData)));
   };
 
   // Utilities
@@ -127,7 +176,7 @@ export default function OnboardingPage() {
      if (/[A-Z]/.test(password)) c++;
      if (/[0-9]/.test(password)) c++;
      if (/[^a-zA-Z0-9]/.test(password)) c++;
-     return c; // 0 to 4
+     return c;
   }
   const strength = calculateStrength();
   const strengthColors = ["bg-red-200", "bg-red-500", "bg-orange-500", "bg-yellow-500", "bg-green-500"];
@@ -278,22 +327,74 @@ export default function OnboardingPage() {
 
               {step === 4 && (
                 <motion.div key="step4" initial={{ opacity: 0, scale: 0.9 }} animate={{ opacity: 1, scale: 1 }}>
-                  <div className="text-center py-8">
-                     <motion.div 
-                        initial={{ scale: 0 }}
-                        animate={{ scale: 1 }}
-                        transition={{ type: "spring", stiffness: 200, damping: 20 }}
-                        className="w-24 h-24 bg-green-100 rounded-full flex items-center justify-center mx-auto mb-6"
-                     >
-                        <CheckCircle2 className="w-12 h-12 text-green-500" />
-                     </motion.div>
-                     <h2 className="text-3xl font-bold text-secondary mb-3">You&apos;re all set! 🎉</h2>
-                     <p className="text-gray-500 mb-8 max-w-sm mx-auto">
-                        Your ParkPing account is ready. Your QR sticker will be delivered in 5-7 days after you complete your order.
-                     </p>
-                     <Button className="w-full bg-orange-500 hover:bg-orange-600 text-white h-14 text-lg" onClick={() => router.push("/dashboard")}>
-                        Go to Dashboard →
-                     </Button>
+                  <div className="text-center py-4">
+                     {qrCodeString ? (
+                       <>
+                         <motion.div
+                           initial={{ scale: 0 }}
+                           animate={{ scale: 1 }}
+                           transition={{ type: "spring", stiffness: 200, damping: 20 }}
+                         >
+                           <h2 className="text-3xl font-bold text-secondary mb-2">Your QR Code is Ready! 🎉</h2>
+                           <p className="text-gray-500 mb-6 text-sm">
+                             Your car <strong>{carNumber}</strong> is registered with ParkPing.
+                           </p>
+                         </motion.div>
+
+                         {/* QR Code Display */}
+                         <div ref={qrRef} className="bg-white border-2 border-gray-100 rounded-2xl p-6 inline-block shadow-lg mb-6">
+                           <QRCodeSVG
+                             value={`${PARKPING_URL}/scan/${qrCodeString}`}
+                             size={200}
+                             bgColor="#ffffff"
+                             fgColor="#1A1A2E"
+                             level="H"
+                             includeMargin={true}
+                           />
+                           <p className="text-xs text-gray-400 font-mono mt-2">{qrCodeString}</p>
+                         </div>
+
+                         <div className="space-y-3 max-w-sm mx-auto">
+                           <Button
+                             className="w-full h-12"
+                             variant="outline"
+                             onClick={handleDownloadQR}
+                           >
+                             <Download className="w-4 h-4 mr-2" /> Download QR Code
+                           </Button>
+
+                           <div className="bg-orange-50 border border-orange-200 rounded-xl p-4 text-left">
+                             <p className="text-sm font-semibold text-orange-800 mb-1">📋 Instructions</p>
+                             <p className="text-xs text-orange-700 leading-relaxed">
+                               Print this QR code and stick it on your windshield (front and back).
+                               You can also order a premium weather-proof sticker from your dashboard.
+                             </p>
+                           </div>
+
+                           <Button className="w-full bg-orange-500 hover:bg-orange-600 text-white h-14 text-lg" onClick={() => router.push("/dashboard")}>
+                             Go to Dashboard →
+                           </Button>
+                         </div>
+                       </>
+                     ) : (
+                       <>
+                         <motion.div 
+                            initial={{ scale: 0 }}
+                            animate={{ scale: 1 }}
+                            transition={{ type: "spring", stiffness: 200, damping: 20 }}
+                            className="w-24 h-24 bg-green-100 rounded-full flex items-center justify-center mx-auto mb-6"
+                         >
+                            <CheckCircle2 className="w-12 h-12 text-green-500" />
+                         </motion.div>
+                         <h2 className="text-3xl font-bold text-secondary mb-3">You&apos;re all set! 🎉</h2>
+                         <p className="text-gray-500 mb-8 max-w-sm mx-auto">
+                            Your ParkPing account is ready. Head to the dashboard to manage your vehicles.
+                         </p>
+                         <Button className="w-full bg-orange-500 hover:bg-orange-600 text-white h-14 text-lg" onClick={() => router.push("/dashboard")}>
+                            Go to Dashboard →
+                         </Button>
+                       </>
+                     )}
                   </div>
                 </motion.div>
               )}

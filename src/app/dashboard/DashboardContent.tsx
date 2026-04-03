@@ -4,9 +4,11 @@ import { useState, useEffect, useCallback } from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/Card";
 import { Button } from "@/components/ui/Button";
 import { useToast } from "@/components/ui/ToastProvider";
-import { Plus, QrCode, BellRing, Clock, MessageCircle, CheckCircle2 } from "lucide-react";
+import { Plus, QrCode, BellRing, Clock, MessageCircle, CheckCircle2, Download } from "lucide-react";
 import Link from "next/link";
 import { createClient } from "@/lib/supabase/client";
+import { QRCodeSVG } from "qrcode.react";
+import { PARKPING_URL } from "@/lib/utils";
 
 interface DashboardContentProps {
   tab: string | string[];
@@ -21,6 +23,14 @@ interface Vehicle {
   qr_id?: string;
 }
 
+interface QRCodeData {
+  id: string;
+  vehicle_id: string;
+  qr_code_string: string;
+  is_active?: boolean;
+  delivery_status?: string;
+}
+
 export default function DashboardContent({ tab }: DashboardContentProps) {
   const currentTab = Array.isArray(tab) ? tab[0] : tab;
   const [profile, setProfile] = useState<{ full_name?: string; phone?: string; age?: number; gender?: string; date_of_birth?: string; } | null>(null);
@@ -28,6 +38,7 @@ export default function DashboardContent({ tab }: DashboardContentProps) {
   const [loading, setLoading] = useState(false);
   const toast = useToast();
   const [vehicles, setVehicles] = useState<Vehicle[]>([]);
+  const [qrCodes, setQrCodes] = useState<QRCodeData[]>([]);
   const [alerts, setAlerts] = useState<Array<{id: string; scan_id: string; alert_type: string; status: string; eta_minutes: number | null; owner_response: string | null; created_at: string; vehicle_make?: string; vehicle_model?: string}>>([]);
   const [respondingTo, setRespondingTo] = useState<string | null>(null);
   const [showEtaPicker, setShowEtaPicker] = useState(false);
@@ -56,7 +67,19 @@ export default function DashboardContent({ tab }: DashboardContentProps) {
       }
 
       const { data: vehiclesData } = await supabase.from('vehicles').select('*').eq('user_id', session.user.id);
-      if (vehiclesData) setVehicles(vehiclesData);
+      if (vehiclesData) {
+        setVehicles(vehiclesData);
+
+        // Fetch QR codes for all vehicles
+        const vehicleIds = vehiclesData.map((v: Vehicle) => v.id);
+        if (vehicleIds.length > 0) {
+          const { data: qrData } = await supabase
+            .from('qr_codes')
+            .select('id, vehicle_id, qr_code_string, is_active, delivery_status')
+            .in('vehicle_id', vehicleIds);
+          if (qrData) setQrCodes(qrData as QRCodeData[]);
+        }
+      }
 
       // Fetch alerts for user's vehicles
       if (vehiclesData && vehiclesData.length > 0) {
@@ -236,7 +259,9 @@ export default function DashboardContent({ tab }: DashboardContentProps) {
              </Link>
           </div>
         ) : (
-        vehicles.map((v) => (
+        vehicles.map((v) => {
+          const qr = qrCodes.find(q => q.vehicle_id === v.id);
+          return (
           <Card key={v.id} className="relative overflow-hidden group">
             <CardHeader className="border-b border-gray-50 pb-4 bg-gray-50/50">
               <div className="flex justify-between items-start">
@@ -244,29 +269,89 @@ export default function DashboardContent({ tab }: DashboardContentProps) {
                   <CardTitle className="text-2xl mb-1">{v.car_number}</CardTitle>
                   <p className="text-sm text-gray-500 font-medium">{v.make} {v.model} • {v.color}</p>
                 </div>
-                <span className="px-3 py-1 rounded-full text-xs font-bold uppercase tracking-wider bg-success/10 text-success">
-                  Registered
-                </span>
+                <div className="flex flex-col gap-1 items-end">
+                  <span className={`px-3 py-1 rounded-full text-xs font-bold uppercase tracking-wider ${
+                    qr?.is_active !== false ? 'bg-success/10 text-success' : 'bg-gray-200 text-gray-600'
+                  }`}>
+                    {qr?.is_active !== false ? 'Active' : 'Inactive'}
+                  </span>
+                  {qr?.delivery_status && (
+                    <span className={`px-3 py-1 rounded-full text-xs font-bold uppercase tracking-wider ${
+                      qr.delivery_status === 'delivered' ? 'bg-green-100 text-green-700' :
+                      qr.delivery_status === 'dispatched' ? 'bg-blue-100 text-blue-700' :
+                      'bg-orange-100 text-orange-700'
+                    }`}>
+                      {qr.delivery_status}
+                    </span>
+                  )}
+                </div>
               </div>
             </CardHeader>
             <CardContent className="pt-6">
-               <div className="flex items-center justify-between">
+              {qr?.qr_code_string ? (
+                <div className="text-center">
+                  <div className="bg-white border-2 border-gray-100 rounded-xl p-4 inline-block shadow-sm mb-4" id={`qr-${v.id}`}>
+                    <QRCodeSVG
+                      value={`${PARKPING_URL}/scan/${qr.qr_code_string}`}
+                      size={160}
+                      bgColor="#ffffff"
+                      fgColor="#1A1A2E"
+                      level="H"
+                      includeMargin={true}
+                    />
+                    <p className="text-[10px] text-gray-400 font-mono mt-1">{qr.qr_code_string}</p>
+                  </div>
+                  <div className="flex gap-2">
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      className="flex-1"
+                      onClick={() => {
+                        const container = document.getElementById(`qr-${v.id}`);
+                        const svg = container?.querySelector('svg');
+                        if (!svg) return;
+                        const canvas = document.createElement('canvas');
+                        const ctx = canvas.getContext('2d');
+                        const svgData = new XMLSerializer().serializeToString(svg);
+                        const img = new Image();
+                        canvas.width = 512; canvas.height = 512;
+                        img.onload = () => {
+                          ctx?.drawImage(img, 0, 0, 512, 512);
+                          const link = document.createElement('a');
+                          link.download = `parkping-${v.car_number.replace(/\s/g, '')}.png`;
+                          link.href = canvas.toDataURL('image/png');
+                          link.click();
+                        };
+                        img.src = 'data:image/svg+xml;base64,' + btoa(unescape(encodeURIComponent(svgData)));
+                      }}
+                    >
+                      <Download className="w-3.5 h-3.5 mr-1" /> Download
+                    </Button>
+                    <Link href="/order">
+                      <Button variant="primary" size="sm">Order Sticker</Button>
+                    </Link>
+                  </div>
+                </div>
+              ) : (
+                <div className="flex items-center justify-between">
                   <div className="flex items-center gap-3">
                      <div className="w-12 h-12 bg-gray-100 rounded-xl flex items-center justify-center border border-gray-200">
                        <QrCode className="w-6 h-6 text-gray-500" />
                      </div>
                      <div>
-                       <p className="text-sm font-bold text-gray-900">QR Sticker Config</p>
-                       <p className="text-xs text-gray-500 font-medium font-mono">{v.qr_id || "Awaiting mapping"}</p>
+                       <p className="text-sm font-bold text-gray-900">QR Code</p>
+                       <p className="text-xs text-gray-500 font-medium">Not generated yet</p>
                      </div>
                   </div>
                   <Link href="/order">
                     <Button variant="primary" size="sm">Order Sticker</Button>
                   </Link>
-               </div>
+                </div>
+              )}
             </CardContent>
           </Card>
-        )))}
+        );}))
+        }
       </div>
     </div>
   );

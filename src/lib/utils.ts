@@ -22,3 +22,15 @@ export function formatPhone(val: string) {
   }
   return `+91 ${digits.slice(0, 10)}`;
 }
+
+// Generate a unique qr_code_string like "qr_x7k2m9p4"
+export function generateQRCodeString(): string {
+  const chars = 'abcdefghijklmnopqrstuvwxyz0123456789';
+  let result = 'qr_';
+  for (let i = 0; i < 8; i++) {
+    result += chars.charAt(Math.floor(Math.random() * chars.length));
+  }
+  return result;
+}
+
+export const PARKPING_URL = 'https://parkping.vercel.app';

@@ -18,23 +18,23 @@
    Collecting build traces ...
 
 Route (app)                              Size     First Load JS
-┌ ○ /                                    6.34 kB         218 kB
+┌ ○ /                                    6.34 kB         219 kB
 ├ ○ /_not-found                          138 B          87.5 kB
 ├ ƒ /api/messages/send                   0 B                0 B
 ├ ƒ /api/scan/[qr-id]/alert              0 B                0 B
 ├ ƒ /api/scan/[qr-id]/respond            0 B                0 B
-├ ○ /auth/forgot-password                3.43 kB         212 kB
-├ ○ /auth/login                          3.96 kB         212 kB
-├ ○ /auth/signup                         4.61 kB         213 kB
+├ ○ /auth/forgot-password                3.54 kB         212 kB
+├ ○ /auth/login                          4.07 kB         212 kB
+├ ○ /auth/signup                         4.71 kB         213 kB
 ├ ƒ /chat/[scanId]                       3.03 kB         192 kB
 ├ ○ /contact                             3.85 kB         216 kB
-├ ƒ /dashboard                           7.32 kB         215 kB
-├ ○ /onboarding                          7.31 kB         205 kB
+├ ƒ /dashboard                           7.95 kB         222 kB
+├ ○ /onboarding                          7.82 kB         212 kB
 ├ ○ /order                               3.63 kB         216 kB
 ├ ○ /privacy                             1.07 kB         213 kB
-├ ○ /register                            3.53 kB         216 kB
-├ ƒ /scan/[qr-id]                        7.38 kB         205 kB
-├ ƒ /scan/[qr-id]/waiting                3.55 kB         201 kB
+├ ○ /register                            4.16 kB         223 kB
+├ ƒ /scan/[qr-id]                        7.49 kB         205 kB
+├ ƒ /scan/[qr-id]/waiting                3.66 kB         201 kB
 └ ○ /terms                               1.02 kB         213 kB
 + First Load JS shared by all            87.3 kB
   ├ chunks/117-4f5b424f20efdcae.js       31.7 kB
