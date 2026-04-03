@@ -114,16 +114,21 @@ export async function POST(
 
     const city = request.headers.get("x-city") || "Unknown";
 
+    const scanLogPayload: Record<string, unknown> = {
+      qr_id: qrCode.id,
+      scanner_phone_hash: phoneHash,
+      contact_method: normalizedContactMethod,
+      location_city: city,
+      resolution_status: "pending",
+    };
+
+    if (scannerName) {
+      scanLogPayload.scanner_name = scannerName;
+    }
+
     const { data: scanLog, error: scanError } = await supabase
       .from("scan_logs")
-      .insert({
-        qr_id: qrCode.id,
-        scanner_phone_hash: phoneHash,
-        scanner_name: scannerName || null,
-        contact_method: normalizedContactMethod,
-        location_city: city,
-        resolution_status: "pending",
-      })
+      .insert(scanLogPayload)
       .select("id")
       .single();
 
