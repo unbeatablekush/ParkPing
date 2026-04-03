@@ -39,6 +39,7 @@ export default function DashboardContent({ tab }: DashboardContentProps) {
   const toast = useToast();
   const [vehicles, setVehicles] = useState<Vehicle[]>([]);
   const [qrCodes, setQrCodes] = useState<QRCodeData[]>([]);
+  const [autoVerifyEnabled] = useState(true);
   const [totalScans, setTotalScans] = useState(0);
   const [alertsReceived, setAlertsReceived] = useState(0);
   const [callsReceived, setCallsReceived] = useState(0);
@@ -119,6 +120,22 @@ export default function DashboardContent({ tab }: DashboardContentProps) {
   useEffect(() => {
     fetchData();
   }, [fetchData]);
+
+  const handleDeleteVehicle = async (vehicleId: string) => {
+    const confirmDelete = window.confirm("Delete this vehicle and all related data? This cannot be undone.");
+    if (!confirmDelete) return;
+
+    const supabase = createClient();
+    const { error } = await supabase.from('vehicles').delete().eq('id', vehicleId);
+    if (error) {
+      toast("Failed to delete vehicle: " + error.message, "error");
+      return;
+    }
+
+    setVehicles((prev) => prev.filter((v) => v.id !== vehicleId));
+    setQrCodes((prev) => prev.filter((q) => q.vehicle_id !== vehicleId));
+    toast("Vehicle deleted successfully", "success");
+  };
 
   const handleUpdateProfile = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -211,6 +228,11 @@ export default function DashboardContent({ tab }: DashboardContentProps) {
       <div>
         <h1 className="text-3xl font-bold text-secondary mb-2">Hello, {profile?.full_name?.split(' ')[0] || "there"} 👋</h1>
         <p className="text-gray-500">Here&apos;s what is happening with your registered vehicles.</p>
+        {autoVerifyEnabled && (
+          <div className="mt-2 inline-flex items-center rounded-full bg-green-50 border border-green-200 text-green-800 px-3 py-1 text-sm font-medium">
+            Auto-verify mode active
+          </div>
+        )}
       </div>
 
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
@@ -338,6 +360,9 @@ export default function DashboardContent({ tab }: DashboardContentProps) {
                     <Link href="/order">
                       <Button variant="primary" size="sm">Order Sticker</Button>
                     </Link>
+                    <Button variant="danger" size="sm" onClick={() => handleDeleteVehicle(v.id)}>
+                      Delete Vehicle
+                    </Button>
                   </div>
                 </div>
               ) : (
