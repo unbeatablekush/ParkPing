@@ -23,7 +23,7 @@ export default function PrivacyPage() {
 
         <h2 className="text-2xl font-bold text-gray-800 mt-8 mb-4">3. Data Security</h2>
         <p className="text-gray-600 mb-6 leading-relaxed">
-          We use enterprise-grade encryption to protect your data. Your OTP verifications use Firebase infrastructure, and we ensure that we only log minimal metadata (such as timestamp and location) to discourage misuse of the platform.
+          We use enterprise-grade encryption to protect your data. Push notifications are delivered via Firebase Cloud Messaging (FCM), and we ensure that we only log minimal metadata (such as timestamp and location) to discourage misuse of the platform.
         </p>
         
         <p className="text-gray-600 mt-12 pt-8 border-t border-gray-100 italic">

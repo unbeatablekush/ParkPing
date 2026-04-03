@@ -2,13 +2,16 @@
 
 import { useState, useEffect, useCallback } from "react";
 import Link from "next/link";
-import { LayoutDashboard, CarFront, History, Settings, Menu, X, LogOut } from "lucide-react";
+import { LayoutDashboard, CarFront, History, Settings, Menu, X, LogOut, BellRing } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
 import { createClient } from "@/lib/supabase/client";
+import { useFCMToken } from "@/hooks/useFCMToken";
+import { messaging, onMessage } from "@/lib/firebase";
 
 const navItems = [
   { name: "Overview", href: "/dashboard", icon: LayoutDashboard },
   { name: "My Vehicles", href: "/dashboard?tab=vehicles", icon: CarFront },
+  { name: "Alerts", href: "/dashboard?tab=alerts", icon: BellRing },
   { name: "Scan History", href: "/dashboard?tab=history", icon: History },
   { name: "Settings", href: "/dashboard?tab=settings", icon: Settings },
 ];
@@ -16,6 +19,30 @@ const navItems = [
 export default function DashboardLayout({ children }: { children: React.ReactNode }) {
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [profile, setProfile] = useState<{ full_name?: string; phone?: string; email?: string } | null>(null);
+
+  // Initialize FCM on dashboard mount
+  useFCMToken();
+
+  // Listen for incoming FCM messages while app is open
+  useEffect(() => {
+    if (!messaging) return;
+    const unsubscribe = onMessage(messaging, (payload) => {
+      // Vibrate if supported
+      if ('vibrate' in navigator) {
+        navigator.vibrate([500, 200, 500, 200, 1000]);
+      }
+      // Show browser notification as backup
+      if (Notification.permission === 'granted') {
+        new Notification(payload.notification?.title || '🚨 ParkPing Alert', {
+          body: payload.notification?.body || 'Someone needs you to move your car!',
+          icon: '/favicon.ico',
+        });
+      }
+      // Navigate to alerts tab
+      window.location.href = '/dashboard?tab=alerts';
+    });
+    return () => unsubscribe();
+  }, []);
 
   const fetchProfile = useCallback(async () => {
     const supabase = createClient();

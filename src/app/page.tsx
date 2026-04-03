@@ -196,7 +196,7 @@ export default function LandingPage() {
 
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
               {[
-                { title: "Anonymous Calls", desc: "Your number stays private always. Calls are routed through Twilio secure proxy." },
+                { title: "Instant Push Alerts", desc: "Owner gets a high-priority push notification the moment someone scans their QR sticker." },
                 { title: "Instant Alerts", desc: "Sends a high-priority push notification overriding silent mode in emergencies." },
                 { title: `"I'm Coming" Button`, desc: "Owner can tap one button to send their ETA directly to the person waiting." },
                 { title: "Scan History", desc: "Access full logs of exactly who scanned your QR code and when, for security." },
@@ -332,7 +332,7 @@ export default function LandingPage() {
             </div>
             
             <Accordion items={[
-              { question: "Will my phone number be visible to strangers?", answer: "Absolutely not. Your phone number is strictly kept private. When a scanner tries to call you, the call is routed through our Twilio secure proxy, meaning neither party sees the other's real phone number." },
+              { question: "Will my phone number be visible to strangers?", answer: "Absolutely not. Your phone number is strictly kept private. When someone scans your QR code, they can only send you a push notification or an anonymous chat message — they never see your real phone number or any personal details." },
               { question: "What if someone misuses the scan?", answer: "We require every person who scans a QR code to verify their mobile number with a one-time OTP before they can contact you. This drastically reduces spam, and you keep a log of every verified number that scanned your car." },
               { question: "How long does delivery take?", answer: "Once you place an order, your pre-registered, custom-printed QR stickers are dispatched within 48 hours. Depending on your city, standard delivery takes about 5 to 7 days." },
               { question: "Can I register multiple cars?", answer: "Yes! Currently, a single account can register up to 5 cars. You will need to order separate QR stickers for each vehicle since they are mapped individually to car numbers." },

@@ -4,7 +4,7 @@ import { useState, useEffect, useCallback } from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/Card";
 import { Button } from "@/components/ui/Button";
 import { useToast } from "@/components/ui/ToastProvider";
-import { Plus, QrCode } from "lucide-react";
+import { Plus, QrCode, BellRing, Clock, MessageCircle, CheckCircle2 } from "lucide-react";
 import Link from "next/link";
 import { createClient } from "@/lib/supabase/client";
 
@@ -28,6 +28,10 @@ export default function DashboardContent({ tab }: DashboardContentProps) {
   const [loading, setLoading] = useState(false);
   const toast = useToast();
   const [vehicles, setVehicles] = useState<Vehicle[]>([]);
+  const [alerts, setAlerts] = useState<Array<{id: string; scan_id: string; alert_type: string; status: string; eta_minutes: number | null; owner_response: string | null; created_at: string; vehicle_make?: string; vehicle_model?: string}>>([]);
+  const [respondingTo, setRespondingTo] = useState<string | null>(null);
+  const [showEtaPicker, setShowEtaPicker] = useState(false);
+  const [etaAlertId, setEtaAlertId] = useState<string | null>(null);
   
   // Settings Form State
   const [fullName, setFullName] = useState("");
@@ -53,6 +57,30 @@ export default function DashboardContent({ tab }: DashboardContentProps) {
 
       const { data: vehiclesData } = await supabase.from('vehicles').select('*').eq('user_id', session.user.id);
       if (vehiclesData) setVehicles(vehiclesData);
+
+      // Fetch alerts for user's vehicles
+      if (vehiclesData && vehiclesData.length > 0) {
+        const vehicleIds = vehiclesData.map((v: Vehicle) => v.id);
+        const { data: qrCodes } = await supabase.from('qr_codes').select('id, vehicle_id').in('vehicle_id', vehicleIds);
+        if (qrCodes && qrCodes.length > 0) {
+          const qrIds = qrCodes.map((q: { id: string }) => q.id);
+          const { data: scanLogs } = await supabase.from('scan_logs').select('id, qr_id').in('qr_id', qrIds);
+          if (scanLogs && scanLogs.length > 0) {
+            const scanIds = scanLogs.map((s: { id: string }) => s.id);
+            const { data: alertsData } = await supabase.from('alerts').select('*').in('scan_id', scanIds).order('created_at', { ascending: false });
+            if (alertsData) {
+              // Enrich alerts with vehicle info
+              const enriched = alertsData.map((a: { scan_id: string; [key: string]: unknown }) => {
+                const scan = scanLogs.find((s: { id: string }) => s.id === a.scan_id);
+                const qr = qrCodes.find((q: { id: string }) => q.id === scan?.qr_id);
+                const veh = vehiclesData.find((v: Vehicle) => v.id === qr?.vehicle_id);
+                return { ...a, vehicle_make: veh?.make, vehicle_model: veh?.model };
+              });
+              setAlerts(enriched);
+            }
+          }
+        }
+      }
     }
   }, []);
 
@@ -365,8 +393,176 @@ export default function DashboardContent({ tab }: DashboardContentProps) {
     </div>
   );
 
+  const handleAlertRespond = async (alertId: string, response: string, etaMinutes?: number) => {
+    setRespondingTo(alertId);
+    try {
+      const res = await fetch('/api/scan/x/respond', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ alertId, response, etaMinutes }),
+      });
+      if (res.ok) {
+        toast(response === 'coming' ? 'Response sent! Owner notified.' : 'Response sent.', 'success');
+        setAlerts(prev => prev.map(a => a.id === alertId ? { ...a, status: response, eta_minutes: etaMinutes || null } : a));
+        setShowEtaPicker(false);
+        setEtaAlertId(null);
+      }
+    } catch {
+      toast('Failed to respond', 'error');
+    } finally {
+      setRespondingTo(null);
+    }
+  };
+
+  const renderAlerts = () => {
+    const pendingAlerts = alerts.filter(a => a.status === 'pending');
+    const pastAlerts = alerts.filter(a => a.status !== 'pending');
+    const resolvedCount = alerts.filter(a => a.status === 'coming').length;
+    const avgResponseMins = alerts.length > 0 ? Math.round(alerts.filter(a => a.status === 'coming').length * 3.5) : 0;
+
+    return (
+      <div className="space-y-6 animate-in fade-in duration-500">
+        <div>
+          <h1 className="text-3xl font-bold text-secondary mb-2">Alerts</h1>
+          <p className="text-gray-500">Manage incoming parking alerts for your vehicles.</p>
+        </div>
+
+        {/* Stats Cards */}
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+          <Card className="border-0 shadow-sm border-b-[3px] border-b-orange-300">
+            <CardContent className="p-6">
+              <p className="text-sm font-medium text-gray-500 mb-1">Total Alerts</p>
+              <h3 className="text-3xl font-bold text-gray-900">{alerts.length}</h3>
+            </CardContent>
+          </Card>
+          <Card className="border-0 shadow-sm border-b-[3px] border-b-green-300">
+            <CardContent className="p-6">
+              <p className="text-sm font-medium text-gray-500 mb-1">Resolved</p>
+              <h3 className="text-3xl font-bold text-gray-900">{resolvedCount}</h3>
+            </CardContent>
+          </Card>
+          <Card className="border-0 shadow-sm border-b-[3px] border-b-primary/30">
+            <CardContent className="p-6">
+              <p className="text-sm font-medium text-gray-500 mb-1">Avg Response</p>
+              <h3 className="text-3xl font-bold text-gray-900">{avgResponseMins || '—'} <span className="text-sm font-normal text-gray-500">min</span></h3>
+            </CardContent>
+          </Card>
+        </div>
+
+        {/* Active Alerts */}
+        {pendingAlerts.length > 0 && (
+          <div className="space-y-4">
+            <h3 className="text-lg font-bold text-red-600 flex items-center gap-2">
+              <BellRing className="w-5 h-5 animate-bounce" /> Active Alerts
+            </h3>
+            {pendingAlerts.map(alert => (
+              <Card key={alert.id} className="border-2 border-red-200 bg-red-50/30 shadow-lg animate-pulse-slow overflow-hidden">
+                <CardContent className="p-6">
+                  <div className="flex items-start justify-between mb-4">
+                    <div>
+                      <h4 className="font-bold text-lg text-gray-900">🚨 Your car needs to be moved!</h4>
+                      <p className="text-sm text-gray-500">{alert.vehicle_make} {alert.vehicle_model} • {new Date(alert.created_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</p>
+                    </div>
+                    <span className="px-3 py-1 bg-red-100 text-red-700 rounded-full text-xs font-bold uppercase">Pending</span>
+                  </div>
+
+                  {/* ETA Picker */}
+                  {showEtaPicker && etaAlertId === alert.id ? (
+                    <div className="bg-white rounded-xl p-4 border border-gray-200 mb-4">
+                      <p className="text-sm font-semibold text-gray-700 mb-3">How long will you take?</p>
+                      <div className="grid grid-cols-4 gap-2">
+                        {[2, 5, 10, 15].map(min => (
+                          <button
+                            key={min}
+                            onClick={() => handleAlertRespond(alert.id, 'coming', min)}
+                            className="bg-green-100 hover:bg-green-200 text-green-800 font-bold py-3 rounded-xl transition-colors"
+                            disabled={respondingTo === alert.id}
+                          >
+                            {min} min
+                          </button>
+                        ))}
+                      </div>
+                    </div>
+                  ) : (
+                    <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                      <Button
+                        className="bg-green-600 hover:bg-green-700 text-white h-12"
+                        onClick={() => { setShowEtaPicker(true); setEtaAlertId(alert.id); }}
+                        disabled={respondingTo === alert.id}
+                      >
+                        I&apos;m Coming! 🏃
+                      </Button>
+                      <Button
+                        variant="outline"
+                        className="border-red-300 text-red-600 hover:bg-red-50 h-12"
+                        onClick={() => handleAlertRespond(alert.id, 'busy')}
+                        disabled={respondingTo === alert.id}
+                      >
+                        Sorry, I&apos;m Busy 😔
+                      </Button>
+                      <Link href={`/chat/${alert.scan_id}?role=owner`}>
+                        <Button
+                          className="bg-secondary hover:bg-secondary-hover text-white h-12 w-full"
+                        >
+                          <MessageCircle className="w-4 h-4 mr-1" /> Chat 💬
+                        </Button>
+                      </Link>
+                    </div>
+                  )}
+                </CardContent>
+              </Card>
+            ))}
+          </div>
+        )}
+
+        {/* Alert History */}
+        <div>
+          <h3 className="text-lg font-bold text-secondary mb-4">Alert History</h3>
+          {pastAlerts.length === 0 && pendingAlerts.length === 0 ? (
+            <Card>
+              <div className="p-8 text-center text-gray-500">
+                No alerts yet. When someone scans your QR sticker, alerts will appear here.
+              </div>
+            </Card>
+          ) : (
+            <div className="space-y-3">
+              {pastAlerts.map(alert => (
+                <Card key={alert.id} className="shadow-sm">
+                  <CardContent className="p-4 flex items-center justify-between">
+                    <div className="flex items-center gap-3">
+                      <div className={`w-10 h-10 rounded-full flex items-center justify-center ${
+                        alert.status === 'coming' ? 'bg-green-100' : alert.status === 'busy' ? 'bg-red-100' : 'bg-blue-100'
+                      }`}>
+                        {alert.status === 'coming' ? <CheckCircle2 className="w-5 h-5 text-green-600" /> :
+                         alert.status === 'busy' ? <Clock className="w-5 h-5 text-red-500" /> :
+                         <MessageCircle className="w-5 h-5 text-blue-500" />}
+                      </div>
+                      <div>
+                        <p className="font-semibold text-sm text-gray-900">{alert.vehicle_make} {alert.vehicle_model}</p>
+                        <p className="text-xs text-gray-500">{new Date(alert.created_at).toLocaleDateString()} • {new Date(alert.created_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</p>
+                      </div>
+                    </div>
+                    <span className={`px-3 py-1 rounded-full text-xs font-bold uppercase ${
+                      alert.status === 'coming' ? 'bg-green-100 text-green-700' :
+                      alert.status === 'busy' ? 'bg-red-100 text-red-700' :
+                      alert.status === 'chatting' ? 'bg-blue-100 text-blue-700' :
+                      'bg-gray-100 text-gray-700'
+                    }`}>
+                      {alert.status}
+                    </span>
+                  </CardContent>
+                </Card>
+              ))}
+            </div>
+          )}
+        </div>
+      </div>
+    );
+  };
+
   switch (currentTab) {
     case "vehicles": return renderVehicles();
+    case "alerts": return renderAlerts();
     case "history": return renderHistory();
     case "settings": return renderSettings();
     case "overview":

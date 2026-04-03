@@ -1,0 +1,2 @@
+src/app/chat/[scanId]/page.tsx(73,10): error TS7006: Parameter 'payload' implicitly has an 'any' type.
+src/app/scan/[qr-id]/waiting/page.tsx(54,10): error TS7006: Parameter 'payload' implicitly has an 'any' type.
