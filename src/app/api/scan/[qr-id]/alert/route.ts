@@ -29,6 +29,11 @@ export async function POST(
     return NextResponse.json({ error: "Invalid QR code" }, { status: 400 });
   }
 
+  if (!supabaseUrl || !supabaseServiceRoleKey) {
+    console.error("Supabase envs missing", { supabaseUrl, supabaseServiceRoleKey });
+    return NextResponse.json({ error: "Supabase configuration missing" }, { status: 500 });
+  }
+
   let payload: any;
   try {
     payload = await request.json();
