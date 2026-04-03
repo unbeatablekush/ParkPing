@@ -9,7 +9,6 @@ import { Card, CardContent } from "@/components/ui/Card";
 import { CooldownTimer } from "@/components/ui/CooldownTimer";
 import { formatPhone } from "@/lib/utils";
 import { useToast } from "@/components/ui/ToastProvider";
-import { createClient } from "@/lib/supabase/client";
 
 interface VehicleInfo {
   make: string;
@@ -31,39 +30,26 @@ export default function ScanPage({ params }: { params: { "qr-id": string } }) {
   const [vehicle, setVehicle] = useState<VehicleInfo | null>(null);
   const [alertCount, setAlertCount] = useState(0);
 
-  // Fetch vehicle data from qr_code_string
+  // Fetch vehicle data via server API (bypasses RLS for unauthenticated scanners)
   const fetchVehicle = useCallback(async () => {
-    const supabase = createClient();
-    const { data: qrCode } = await supabase
-      .from("qr_codes")
-      .select("id, vehicle_id")
-      .eq("qr_code_string", qrString)
-      .single();
-
-    if (!qrCode) {
+    try {
+      const res = await fetch(`/api/scan/${qrString}/info`);
+      if (!res.ok) {
+        setStep("notfound");
+        return;
+      }
+      const data = await res.json();
+      setVehicle({
+        make: data.make,
+        model: data.model,
+        color: data.color,
+        qr_code_id: data.qr_code_id,
+        vehicle_id: data.vehicle_id,
+      });
+      setStep("phone");
+    } catch {
       setStep("notfound");
-      return;
     }
-
-    const { data: veh } = await supabase
-      .from("vehicles")
-      .select("make, model, color")
-      .eq("id", qrCode.vehicle_id)
-      .single();
-
-    if (!veh) {
-      setStep("notfound");
-      return;
-    }
-
-    setVehicle({
-      make: veh.make,
-      model: veh.model,
-      color: veh.color,
-      qr_code_id: qrCode.id,
-      vehicle_id: qrCode.vehicle_id,
-    });
-    setStep("phone");
   }, [qrString]);
 
   useEffect(() => {

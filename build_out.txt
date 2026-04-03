@@ -22,6 +22,7 @@ Route (app)                              Size     First Load JS
 ├ ○ /_not-found                          138 B          87.5 kB
 ├ ƒ /api/messages/send                   0 B                0 B
 ├ ƒ /api/scan/[qr-id]/alert              0 B                0 B
+├ ƒ /api/scan/[qr-id]/info               0 B                0 B
 ├ ƒ /api/scan/[qr-id]/respond            0 B                0 B
 ├ ○ /auth/forgot-password                3.54 kB         212 kB
 ├ ○ /auth/login                          4.07 kB         212 kB
@@ -33,7 +34,7 @@ Route (app)                              Size     First Load JS
 ├ ○ /order                               3.63 kB         216 kB
 ├ ○ /privacy                             1.07 kB         213 kB
 ├ ○ /register                            4.16 kB         223 kB
-├ ƒ /scan/[qr-id]                        7.49 kB         205 kB
+├ ƒ /scan/[qr-id]                        7.15 kB         144 kB
 ├ ƒ /scan/[qr-id]/waiting                3.66 kB         201 kB
 └ ○ /terms                               1.02 kB         213 kB
 + First Load JS shared by all            87.3 kB
