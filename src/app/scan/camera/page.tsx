@@ -3,6 +3,26 @@
 import { useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 
+function normalizeScanCode(raw: string) {
+  if (!raw) return "";
+  try {
+    const parsed = new URL(raw);
+    const fromQuery = parsed.searchParams.get("code");
+    if (fromQuery) return fromQuery;
+
+    const segments = parsed.pathname.split("/").filter(Boolean);
+    if (segments.length > 0) {
+      const lastSegment = segments[segments.length - 1];
+      if (lastSegment.startsWith("qr_") || lastSegment.length > 5) {
+        return lastSegment;
+      }
+    }
+  } catch {
+    // not a URL
+  }
+  return raw;
+}
+
 export default function ScanCameraPage() {
   const router = useRouter();
   const videoRef = useRef<HTMLVideoElement | null>(null);
@@ -37,19 +57,18 @@ export default function ScanCameraPage() {
             const detector = new BarcodeDetector({ formats: ["qr_code"] });
             const results = await detector.detect(canvas);
             if (results.length > 0) {
-              const code = results[0].rawValue;
-              if (code) {
+              const raw = results[0].rawValue;
+              if (raw) {
                 setIsScanning(false);
                 const stream = video.srcObject as MediaStream;
                 stream.getTracks().forEach((track) => track.stop());
-                router.push(`/scan?code=${encodeURIComponent(code)}`);
+                const normalized = normalizeScanCode(raw);
+                router.push(`/scan?code=${encodeURIComponent(normalized)}`);
                 return;
               }
             }
           } else {
             ctx.getImageData(0, 0, canvas.width, canvas.height);
-            // browser does not support BarcodeDetector; we can fallback to manual code input
-            // keep running until user enters manually
           }
         } catch {
           setErr("Scanning failed. Please use a modern browser or use manual input.");

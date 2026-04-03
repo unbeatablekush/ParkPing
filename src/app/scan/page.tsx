@@ -11,10 +11,31 @@ interface VehicleData {
   vehicle_id: string;
 }
 
+function normalizeScanCode(raw: string) {
+  if (!raw) return "";
+  try {
+    const parsed = new URL(raw);
+    const fromQuery = parsed.searchParams.get("code");
+    if (fromQuery) return fromQuery;
+
+    const segments = parsed.pathname.split("/").filter(Boolean);
+    if (segments.length > 0) {
+      const lastSegment = segments[segments.length - 1];
+      if (lastSegment.startsWith("qr_") || lastSegment.length > 5) {
+        return lastSegment;
+      }
+    }
+  } catch {
+    // not a URL, keep raw value
+  }
+  return raw;
+}
+
 function ScanContent() {
   const searchParams = useSearchParams();
   const router = useRouter();
-  const code = searchParams.get("code") || "";
+  const rawCode = searchParams.get("code") || "";
+  const code = normalizeScanCode(rawCode);
 
   const [page, setPage] = useState<"loading" | "notfound" | "nocode" | "form" | "actions">("loading");
   const [vehicle, setVehicle] = useState<VehicleData | null>(null);
