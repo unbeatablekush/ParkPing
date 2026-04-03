@@ -292,7 +292,7 @@ export default function DashboardContent({ tab }: DashboardContentProps) {
                 <div className="text-center">
                   <div className="bg-white border-2 border-gray-100 rounded-xl p-4 inline-block shadow-sm mb-4" id={`qr-${v.id}`}>
                     <QRCodeSVG
-                      value={`${PARKPING_URL}/scan/${qr.qr_code_string}`}
+                      value={`${PARKPING_URL}/scan?code=${qr.qr_code_string}`}
                       size={160}
                       bgColor="#ffffff"
                       fgColor="#1A1A2E"

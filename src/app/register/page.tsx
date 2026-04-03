@@ -116,7 +116,7 @@ export default function RegisterVehiclePage() {
 
                 <div ref={qrRef} className="bg-white border-2 border-gray-100 rounded-2xl p-6 inline-block shadow-lg mb-6">
                   <QRCodeSVG
-                    value={`${PARKPING_URL}/scan/${qrCodeString}`}
+                    value={`${PARKPING_URL}/scan?code=${qrCodeString}`}
                     size={200}
                     bgColor="#ffffff"
                     fgColor="#1A1A2E"
