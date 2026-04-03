@@ -1,16 +1,9 @@
 "use client";
 
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
-import { motion, AnimatePresence } from "framer-motion";
-import { BellRing, MessageCircle, ShieldAlert, Car } from "lucide-react";
-import { Button } from "@/components/ui/Button";
-import { Card, CardContent } from "@/components/ui/Card";
-import { CooldownTimer } from "@/components/ui/CooldownTimer";
-import { formatPhone } from "@/lib/utils";
-import { useToast } from "@/components/ui/ToastProvider";
 
-interface VehicleInfo {
+interface VehicleData {
   make: string;
   model: string;
   color: string | null;
@@ -20,215 +13,348 @@ interface VehicleInfo {
 
 export default function ScanPage({ params }: { params: { "qr-id": string } }) {
   const router = useRouter();
-  const toast = useToast();
   const qrString = params["qr-id"];
 
-  const [step, setStep] = useState<"loading" | "notfound" | "phone" | "actions">("loading");
-  const [phone, setPhone] = useState("");
-  const [loading, setLoading] = useState(false);
-  const [onCooldown, setOnCooldown] = useState(false);
-  const [vehicle, setVehicle] = useState<VehicleInfo | null>(null);
-  const [alertCount, setAlertCount] = useState(0);
+  const [status, setStatus] = useState<"loading" | "notfound" | "email" | "actions">("loading");
+  const [vehicle, setVehicle] = useState<VehicleData | null>(null);
+  const [email, setEmail] = useState("");
+  const [alertLoading, setAlertLoading] = useState(false);
+  const [alertSent, setAlertSent] = useState(false);
+  const [cooldown, setCooldown] = useState(0);
 
-  // Fetch vehicle data via server API (bypasses RLS for unauthenticated scanners)
-  const fetchVehicle = useCallback(async () => {
-    try {
-      const res = await fetch(`/api/scan/${qrString}/info`);
-      if (!res.ok) {
-        setStep("notfound");
-        return;
-      }
-      const data = await res.json();
-      setVehicle({
-        make: data.make,
-        model: data.model,
-        color: data.color,
-        qr_code_id: data.qr_code_id,
-        vehicle_id: data.vehicle_id,
+  // Fetch vehicle info via API
+  useEffect(() => {
+    fetch(`/api/scan/${qrString}/info`)
+      .then((res) => {
+        if (!res.ok) throw new Error("not found");
+        return res.json();
+      })
+      .then((data) => {
+        setVehicle(data);
+        setStatus("email");
+      })
+      .catch(() => {
+        setStatus("notfound");
       });
-      setStep("phone");
-    } catch {
-      setStep("notfound");
-    }
   }, [qrString]);
 
+  // Cooldown timer
   useEffect(() => {
-    fetchVehicle();
-  }, [fetchVehicle]);
+    if (cooldown <= 0) return;
+    const timer = setInterval(() => setCooldown((c) => c - 1), 1000);
+    return () => clearInterval(timer);
+  }, [cooldown]);
 
-  const handlePhoneSubmit = (e: React.FormEvent) => {
+  const handleEmailSubmit = (e: React.FormEvent) => {
     e.preventDefault();
-    const cleanPhone = phone.replace(/\s/g, "");
-    if (cleanPhone.length < 10) {
-      return toast("Enter a valid 10-digit number", "error");
-    }
-    // Store phone in sessionStorage for this scan session
-    sessionStorage.setItem("scanner_phone", cleanPhone);
-    setStep("actions");
+    if (!email || !email.includes("@")) return;
+    sessionStorage.setItem("scanner_email", email);
+    setStatus("actions");
   };
 
   const handleSendAlert = async () => {
-    if (onCooldown || alertCount >= 3) {
-      return toast("Please wait before sending another alert.", "error");
-    }
-
-    setLoading(true);
-    const scannerPhone = sessionStorage.getItem("scanner_phone") || phone.replace(/\s/g, "");
+    if (alertLoading || cooldown > 0) return;
+    setAlertLoading(true);
 
     try {
       const res = await fetch(`/api/scan/${qrString}/alert`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ scannerPhone }),
+        body: JSON.stringify({ scannerPhone: email }), // using email as identifier
       });
-
       const data = await res.json();
-      if (!res.ok) throw new Error(data.error || "Failed to send alert");
 
-      setAlertCount((c) => c + 1);
-      setOnCooldown(true);
-      toast("Alert sent to the car owner! 🔔", "success");
+      if (!res.ok) {
+        alert(data.error || "Failed to send alert");
+        setAlertLoading(false);
+        return;
+      }
+
+      setAlertSent(true);
+      setCooldown(240); // 4 minute cooldown
+      setAlertLoading(false);
+
+      // Navigate to waiting page
       router.push(`/scan/${qrString}/waiting?alertId=${data.alertId}&scanId=${data.scanId}`);
-    } catch (err: unknown) {
-      toast(err instanceof Error ? err.message : "Failed to send alert", "error");
-    } finally {
-      setLoading(false);
+    } catch {
+      alert("Something went wrong. Please try again.");
+      setAlertLoading(false);
     }
   };
 
-  const handleSendMessage = () => {
-    const scannerPhone = sessionStorage.getItem("scanner_phone") || phone.replace(/\s/g, "");
-    if (!scannerPhone) {
-      toast("Please enter your phone number first", "error");
-      setStep("phone");
-      return;
+  const handleOpenChat = async () => {
+    // Create a scan log for chat
+    try {
+      const res = await fetch(`/api/scan/${qrString}/alert`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ scannerPhone: email, contactMethod: "chat" }),
+      });
+      const data = await res.json();
+      if (res.ok && data.scanId) {
+        router.push(`/chat/${data.scanId}?role=scanner`);
+        return;
+      }
+    } catch {
+      // fallback
     }
-    // Navigate to chat — we'll create the scan_log entry when first message is sent
-    router.push(`/scan/${qrString}/chat?phone=${encodeURIComponent(scannerPhone)}`);
+    alert("Unable to start chat. Please try again.");
   };
 
-  if (step === "loading") {
+  const formatCooldown = (s: number) => {
+    const min = Math.floor(s / 60);
+    const sec = s % 60;
+    return `${min}:${sec.toString().padStart(2, "0")}`;
+  };
+
+  // ─── LOADING ─────────────────────────────────
+  if (status === "loading") {
     return (
-      <div className="min-h-screen bg-gray-50 flex items-center justify-center">
-        <div className="animate-pulse text-center">
-          <div className="w-12 h-12 bg-primary/20 rounded-full mx-auto mb-4" />
-          <p className="text-gray-500 font-medium">Loading vehicle details...</p>
+      <div style={styles.page}>
+        <div style={styles.container}>
+          <div style={styles.logo}>
+            <div style={styles.logoIcon}>P</div>
+            <span style={styles.logoText}>ParkPing</span>
+          </div>
+          <div style={{ textAlign: "center", padding: "60px 20px" }}>
+            <div style={{ ...styles.spinner }} />
+            <p style={{ color: "#888", marginTop: 16, fontSize: 14 }}>Loading vehicle details...</p>
+          </div>
         </div>
       </div>
     );
   }
 
-  if (step === "notfound") {
+  // ─── NOT FOUND ───────────────────────────────
+  if (status === "notfound") {
     return (
-      <div className="min-h-screen bg-gray-50 py-12 px-4 flex flex-col items-center justify-center">
-        <Card className="max-w-md w-full shadow-xl p-8 text-center">
-          <div className="w-16 h-16 bg-red-100 rounded-full flex items-center justify-center mx-auto mb-4">
-            <ShieldAlert className="w-8 h-8 text-red-500" />
+      <div style={styles.page}>
+        <div style={styles.container}>
+          <div style={styles.logo}>
+            <div style={styles.logoIcon}>P</div>
+            <span style={styles.logoText}>ParkPing</span>
           </div>
-          <h2 className="text-2xl font-bold text-gray-900 mb-2">QR Code Not Found</h2>
-          <p className="text-gray-500 mb-6">This QR code is not registered with ParkPing or may have expired.</p>
-          <Button onClick={() => router.push("/")} variant="outline" className="w-full">
-            Go to ParkPing Home
-          </Button>
-        </Card>
+          <div style={{ textAlign: "center", padding: "40px 20px" }}>
+            <div style={{ fontSize: 48, marginBottom: 16 }}>😔</div>
+            <h2 style={{ fontSize: 22, fontWeight: 700, color: "#1A1A2E", marginBottom: 8 }}>QR Code Not Found</h2>
+            <p style={{ color: "#888", fontSize: 14, lineHeight: 1.6 }}>
+              This QR code is not registered with ParkPing or may have expired.
+            </p>
+          </div>
+        </div>
       </div>
     );
   }
 
+  // ─── EMAIL INPUT ─────────────────────────────
+  if (status === "email") {
+    return (
+      <div style={styles.page}>
+        <div style={styles.container}>
+          <div style={styles.logo}>
+            <div style={styles.logoIcon}>P</div>
+            <span style={styles.logoText}>ParkPing</span>
+          </div>
+
+          {/* Vehicle Info Banner */}
+          <div style={styles.vehicleBanner}>
+            <p style={{ fontSize: 11, textTransform: "uppercase", letterSpacing: 2, color: "#aaa", marginBottom: 8, fontWeight: 600 }}>
+              You scanned a ParkPing sticker
+            </p>
+            <h2 style={{ fontSize: 22, fontWeight: 700, color: "#fff", marginBottom: 4 }}>
+              {vehicle?.make} {vehicle?.model}
+            </h2>
+            <p style={{ color: "#ccc", fontSize: 14 }}>{vehicle?.color || ""}</p>
+          </div>
+
+          {/* Email Form */}
+          <div style={{ padding: "24px 20px" }}>
+            <h3 style={{ fontSize: 18, fontWeight: 700, color: "#1A1A2E", marginBottom: 6 }}>Enter your email</h3>
+            <p style={{ fontSize: 13, color: "#888", marginBottom: 20, lineHeight: 1.5 }}>
+              For security purposes only. The car owner will <strong>NOT</strong> see your email.
+            </p>
+            <form onSubmit={handleEmailSubmit}>
+              <input
+                type="email"
+                required
+                placeholder="your@email.com"
+                value={email}
+                onChange={(e) => setEmail(e.target.value)}
+                style={styles.input}
+              />
+              <button type="submit" style={styles.primaryBtn}>
+                Continue →
+              </button>
+            </form>
+          </div>
+
+          <p style={styles.disclaimer}>🛡️ Misuse of this service is logged and punishable.</p>
+        </div>
+      </div>
+    );
+  }
+
+  // ─── ACTION BUTTONS ──────────────────────────
   return (
-    <div className="min-h-screen bg-gray-50 py-12 px-4 flex flex-col items-center">
-      {/* Brand Watermark */}
-      <div className="flex items-center gap-2 mb-10">
-        <div className="w-8 h-8 bg-primary text-white rounded-lg flex items-center justify-center font-bold text-xl">
-          P
+    <div style={styles.page}>
+      <div style={styles.container}>
+        <div style={styles.logo}>
+          <div style={styles.logoIcon}>P</div>
+          <span style={styles.logoText}>ParkPing</span>
         </div>
-        <span className="font-bold text-xl tracking-tight text-secondary">ParkPing</span>
-      </div>
 
-      <motion.div
-        initial={{ opacity: 0, y: 20 }}
-        animate={{ opacity: 1, y: 0 }}
-        className="w-full max-w-md"
-      >
-        <Card className="shadow-xl overflow-hidden mb-6">
-          {/* Vehicle Header */}
-          <div className="bg-secondary px-6 py-8 text-center text-white">
-            <div className="w-16 h-16 bg-white/10 rounded-2xl flex items-center justify-center mx-auto mb-4 backdrop-blur-sm">
-              <Car className="w-8 h-8 text-primary" />
+        <div style={styles.vehicleBanner}>
+          <h2 style={{ fontSize: 20, fontWeight: 700, color: "#fff", marginBottom: 4 }}>
+            {vehicle?.make} {vehicle?.model}
+          </h2>
+          <p style={{ color: "#ccc", fontSize: 14 }}>{vehicle?.color || ""}</p>
+        </div>
+
+        <div style={{ padding: "24px 20px" }}>
+          <h3 style={{ fontSize: 18, fontWeight: 700, textAlign: "center", color: "#1A1A2E", marginBottom: 6 }}>
+            Contact the Owner
+          </h3>
+          <p style={{ fontSize: 13, color: "#888", textAlign: "center", marginBottom: 24 }}>
+            Choose how you&apos;d like to reach the car owner
+          </p>
+
+          {/* Alert Button */}
+          <button
+            onClick={handleSendAlert}
+            disabled={alertLoading || cooldown > 0}
+            style={{
+              ...styles.primaryBtn,
+              opacity: alertLoading || cooldown > 0 ? 0.6 : 1,
+              marginBottom: 12,
+              height: 64,
+              fontSize: 17,
+            }}
+          >
+            {alertLoading ? "Sending..." : cooldown > 0 ? `Next alert in ${formatCooldown(cooldown)}` : "🔔 Send Alert"}
+            {!alertLoading && cooldown <= 0 && (
+              <span style={{ display: "block", fontSize: 12, opacity: 0.8, marginTop: 2 }}>Notify owner instantly via push notification</span>
+            )}
+          </button>
+
+          {/* Chat Button */}
+          <button onClick={handleOpenChat} style={{ ...styles.secondaryBtn, height: 64, fontSize: 17 }}>
+            💬 Send Message
+            <span style={{ display: "block", fontSize: 12, opacity: 0.8, marginTop: 2 }}>Chat anonymously with owner</span>
+          </button>
+
+          {alertSent && (
+            <div style={{ marginTop: 16, padding: "12px 16px", background: "#f0fdf4", borderRadius: 12, border: "1px solid #bbf7d0" }}>
+              <p style={{ fontSize: 13, color: "#166534", fontWeight: 600 }}>✅ Alert sent successfully! The owner has been notified.</p>
             </div>
-            <p className="text-xs uppercase tracking-widest text-gray-400 mb-2 font-semibold">You scanned a ParkPing sticker</p>
-            <h2 className="text-xl font-bold mb-1">{vehicle?.make} {vehicle?.model}</h2>
-            <p className="text-gray-300 font-medium">{vehicle?.color || "Color not specified"}</p>
-          </div>
+          )}
+        </div>
 
-          <CardContent className="p-6">
-            <AnimatePresence mode="wait">
-              {step === "phone" && (
-                <motion.div key="phone" initial={{ opacity: 0, x: -20 }} animate={{ opacity: 1, x: 0 }} exit={{ opacity: 0, x: -20 }}>
-                  <h3 className="text-lg font-bold text-gray-900 mb-2">Enter your phone number</h3>
-                  <p className="text-sm text-gray-500 mb-6 pb-4 border-b border-gray-100">
-                    For security purposes only. The car owner will <strong>NOT</strong> see your number.
-                  </p>
-
-                  <form onSubmit={handlePhoneSubmit} className="space-y-4">
-                    <div className="relative rounded-xl shadow-sm border border-gray-200 bg-white focus-within:ring-primary focus-within:border-primary">
-                      <div className="absolute inset-y-0 left-0 pl-4 flex items-center pointer-events-none gap-2">
-                        <span className="text-gray-500 font-medium">+91</span>
-                        <div className="h-4 w-px bg-gray-200 ml-1" />
-                      </div>
-                      <input
-                        type="tel"
-                        className="pl-20 block w-full outline-none py-4 bg-transparent font-medium"
-                        placeholder="Enter mobile number"
-                        value={phone}
-                        onChange={(e) => setPhone(formatPhone(e.target.value).replace("+91 ", ""))}
-                        maxLength={11}
-                      />
-                    </div>
-                    <Button type="submit" className="w-full h-12 bg-orange-500 hover:bg-orange-600 text-white">Continue →</Button>
-                  </form>
-                </motion.div>
-              )}
-
-              {step === "actions" && (
-                <motion.div key="actions" initial={{ opacity: 0, scale: 0.95 }} animate={{ opacity: 1, scale: 1 }}>
-                  <h3 className="text-lg font-bold text-center text-gray-900 mb-2">Contact the Owner</h3>
-                  <p className="text-sm text-gray-500 text-center mb-6">Choose how you&apos;d like to reach the car owner</p>
-
-                  <div className="space-y-4">
-                    <Button
-                      className="w-full h-16 text-lg bg-orange-500 hover:bg-orange-600 text-white"
-                      onClick={handleSendAlert}
-                      disabled={onCooldown || loading}
-                      isLoading={loading}
-                    >
-                      <BellRing className="mr-2 w-5 h-5" /> Send Alert
-                      <span className="block text-xs opacity-80 ml-1">• Notify owner instantly</span>
-                    </Button>
-
-                    <Button
-                      className="w-full h-16 text-lg bg-secondary hover:bg-secondary-hover text-white"
-                      onClick={handleSendMessage}
-                    >
-                      <MessageCircle className="mr-2 w-5 h-5" /> Send Message
-                      <span className="block text-xs opacity-80 ml-1">• Chat anonymously</span>
-                    </Button>
-                  </div>
-
-                  {onCooldown && <CooldownTimer initialSeconds={240} onComplete={() => setOnCooldown(false)} />}
-                  {alertCount >= 3 && (
-                    <p className="text-center text-sm text-red-500 mt-4 font-medium">Maximum 3 alerts per hour reached.</p>
-                  )}
-                </motion.div>
-              )}
-            </AnimatePresence>
-          </CardContent>
-        </Card>
-
-        <p className="text-center text-xs font-medium text-gray-400 flex items-center justify-center gap-1.5 mt-8">
-          <ShieldAlert className="w-4 h-4" /> Misuse of this service is logged and punishable.
-        </p>
-      </motion.div>
+        <p style={styles.disclaimer}>🛡️ Misuse of this service is logged and punishable.</p>
+      </div>
     </div>
   );
 }
+
+// ─── INLINE STYLES (zero external dependencies) ──
+const styles: Record<string, React.CSSProperties> = {
+  page: {
+    minHeight: "100vh",
+    background: "#f5f5f7",
+    display: "flex",
+    justifyContent: "center",
+    alignItems: "flex-start",
+    padding: "24px 16px",
+    fontFamily: "Inter, system-ui, -apple-system, sans-serif",
+  },
+  container: {
+    width: "100%",
+    maxWidth: 420,
+    background: "#fff",
+    borderRadius: 24,
+    overflow: "hidden",
+    boxShadow: "0 8px 32px rgba(0,0,0,0.08)",
+    marginTop: 20,
+  },
+  logo: {
+    display: "flex",
+    alignItems: "center",
+    justifyContent: "center",
+    gap: 8,
+    padding: "20px 0 10px 0",
+  },
+  logoIcon: {
+    width: 32,
+    height: 32,
+    background: "#FF6B35",
+    color: "#fff",
+    borderRadius: 8,
+    display: "flex",
+    alignItems: "center",
+    justifyContent: "center",
+    fontWeight: 800,
+    fontSize: 18,
+  },
+  logoText: {
+    fontWeight: 700,
+    fontSize: 20,
+    color: "#1A1A2E",
+    letterSpacing: -0.5,
+  },
+  vehicleBanner: {
+    background: "#1A1A2E",
+    padding: "28px 24px",
+    textAlign: "center" as const,
+  },
+  input: {
+    width: "100%",
+    height: 52,
+    borderRadius: 14,
+    border: "1.5px solid #e5e5e5",
+    padding: "0 16px",
+    fontSize: 16,
+    outline: "none",
+    marginBottom: 16,
+    boxSizing: "border-box" as const,
+    fontFamily: "inherit",
+  },
+  primaryBtn: {
+    width: "100%",
+    height: 52,
+    borderRadius: 14,
+    border: "none",
+    background: "#FF6B35",
+    color: "#fff",
+    fontSize: 16,
+    fontWeight: 600,
+    cursor: "pointer",
+    fontFamily: "inherit",
+    transition: "opacity 0.2s",
+  },
+  secondaryBtn: {
+    width: "100%",
+    height: 52,
+    borderRadius: 14,
+    border: "none",
+    background: "#1A1A2E",
+    color: "#fff",
+    fontSize: 16,
+    fontWeight: 600,
+    cursor: "pointer",
+    fontFamily: "inherit",
+  },
+  disclaimer: {
+    fontSize: 11,
+    color: "#aaa",
+    textAlign: "center" as const,
+    padding: "16px 20px 20px 20px",
+  },
+  spinner: {
+    width: 40,
+    height: 40,
+    border: "4px solid #eee",
+    borderTopColor: "#FF6B35",
+    borderRadius: "50%",
+    margin: "0 auto",
+    animation: "spin 1s linear infinite",
+  },
+};

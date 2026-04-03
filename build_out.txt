@@ -33,8 +33,8 @@ Route (app)                              Size     First Load JS
 ├ ○ /onboarding                          7.82 kB         212 kB
 ├ ○ /order                               3.63 kB         216 kB
 ├ ○ /privacy                             1.07 kB         213 kB
-├ ○ /register                            4.16 kB         223 kB
-├ ƒ /scan/[qr-id]                        7.15 kB         144 kB
+├ ○ /register                            4.14 kB         223 kB
+├ ƒ /scan/[qr-id]                        2.57 kB        89.9 kB
 ├ ƒ /scan/[qr-id]/waiting                3.66 kB         201 kB
 └ ○ /terms                               1.02 kB         213 kB
 + First Load JS shared by all            87.3 kB
