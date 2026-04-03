@@ -19,6 +19,12 @@ function hashPhone(phone: string): string {
   return crypto.createHash("sha256").update(phone).digest("hex");
 }
 
+type AlertRequestPayload = {
+  scannerPhone?: string;
+  scannerName?: string;
+  contactMethod?: string;
+};
+
 export async function POST(
   request: NextRequest,
   { params }: { params: { "qr-id": string } }
@@ -34,9 +40,9 @@ export async function POST(
     return NextResponse.json({ error: "Supabase configuration missing" }, { status: 500 });
   }
 
-  let payload: any;
+  let payload: AlertRequestPayload;
   try {
-    payload = await request.json();
+    payload = (await request.json()) as AlertRequestPayload;
   } catch (err) {
     console.error("Alert API invalid JSON body:", err);
     return NextResponse.json({ error: "Invalid JSON payload" }, { status: 400 });

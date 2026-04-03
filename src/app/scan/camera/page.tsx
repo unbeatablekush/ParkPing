@@ -100,10 +100,11 @@ export default function ScanCameraPage() {
 
     startCamera();
 
+    const startVideo = videoRef.current;
+
     return () => {
-      const currentVideo = videoRef.current;
-      if (currentVideo?.srcObject) {
-        (currentVideo.srcObject as MediaStream).getTracks().forEach((t) => t.stop());
+      if (startVideo?.srcObject) {
+        (startVideo.srcObject as MediaStream).getTracks().forEach((t) => t.stop());
       }
       setIsScanning(false);
     };
