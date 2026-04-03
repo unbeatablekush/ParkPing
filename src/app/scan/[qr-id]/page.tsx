@@ -15,12 +15,10 @@ export default function ScanPage({ params }: { params: { "qr-id": string } }) {
   const router = useRouter();
   const qrString = params["qr-id"];
 
-  const [status, setStatus] = useState<"loading" | "notfound" | "email" | "actions">("loading");
+  const [status, setStatus] = useState<"loading" | "notfound" | "form" | "actions">("loading");
   const [vehicle, setVehicle] = useState<VehicleData | null>(null);
+  const [name, setName] = useState("");
   const [email, setEmail] = useState("");
-  const [alertLoading, setAlertLoading] = useState(false);
-  const [alertSent, setAlertSent] = useState(false);
-  const [cooldown, setCooldown] = useState(0);
 
   // Fetch vehicle info via API
   useEffect(() => {
@@ -31,80 +29,20 @@ export default function ScanPage({ params }: { params: { "qr-id": string } }) {
       })
       .then((data) => {
         setVehicle(data);
-        setStatus("email");
+        setStatus("form");
       })
       .catch(() => {
         setStatus("notfound");
       });
   }, [qrString]);
 
-  // Cooldown timer
-  useEffect(() => {
-    if (cooldown <= 0) return;
-    const timer = setInterval(() => setCooldown((c) => c - 1), 1000);
-    return () => clearInterval(timer);
-  }, [cooldown]);
-
-  const handleEmailSubmit = (e: React.FormEvent) => {
+  const handleFormSubmit = (e: React.FormEvent) => {
     e.preventDefault();
-    if (!email || !email.includes("@")) return;
+    if (!name.trim() || !email || !email.includes("@")) return;
+    sessionStorage.setItem("scanner_name", name.trim());
     sessionStorage.setItem("scanner_email", email);
-    setStatus("actions");
-  };
-
-  const handleSendAlert = async () => {
-    if (alertLoading || cooldown > 0) return;
-    setAlertLoading(true);
-
-    try {
-      const res = await fetch(`/api/scan/${qrString}/alert`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ scannerPhone: email }), // using email as identifier
-      });
-      const data = await res.json();
-
-      if (!res.ok) {
-        alert(data.error || "Failed to send alert");
-        setAlertLoading(false);
-        return;
-      }
-
-      setAlertSent(true);
-      setCooldown(240); // 4 minute cooldown
-      setAlertLoading(false);
-
-      // Navigate to waiting page
-      router.push(`/scan/${qrString}/waiting?alertId=${data.alertId}&scanId=${data.scanId}`);
-    } catch {
-      alert("Something went wrong. Please try again.");
-      setAlertLoading(false);
-    }
-  };
-
-  const handleOpenChat = async () => {
-    // Create a scan log for chat
-    try {
-      const res = await fetch(`/api/scan/${qrString}/alert`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ scannerPhone: email, contactMethod: "chat" }),
-      });
-      const data = await res.json();
-      if (res.ok && data.scanId) {
-        router.push(`/chat/${data.scanId}?role=scanner`);
-        return;
-      }
-    } catch {
-      // fallback
-    }
-    alert("Unable to start chat. Please try again.");
-  };
-
-  const formatCooldown = (s: number) => {
-    const min = Math.floor(s / 60);
-    const sec = s % 60;
-    return `${min}:${sec.toString().padStart(2, "0")}`;
+    sessionStorage.setItem("vehicle_data", JSON.stringify(vehicle));
+    router.push(`/scan/${qrString}/connect`);
   };
 
   // ─── LOADING ─────────────────────────────────
@@ -146,8 +84,8 @@ export default function ScanPage({ params }: { params: { "qr-id": string } }) {
     );
   }
 
-  // ─── EMAIL INPUT ─────────────────────────────
-  if (status === "email") {
+  // ─── FORM INPUT ─────────────────────────────
+  if (status === "form") {
     return (
       <div style={styles.page}>
         <div style={styles.container}>
@@ -167,13 +105,21 @@ export default function ScanPage({ params }: { params: { "qr-id": string } }) {
             <p style={{ color: "#ccc", fontSize: 14 }}>{vehicle?.color || ""}</p>
           </div>
 
-          {/* Email Form */}
+          {/* Name and Email Form */}
           <div style={{ padding: "24px 20px" }}>
-            <h3 style={{ fontSize: 18, fontWeight: 700, color: "#1A1A2E", marginBottom: 6 }}>Enter your email</h3>
+            <h3 style={{ fontSize: 18, fontWeight: 700, color: "#1A1A2E", marginBottom: 6 }}>Enter your details</h3>
             <p style={{ fontSize: 13, color: "#888", marginBottom: 20, lineHeight: 1.5 }}>
-              For security purposes only. The car owner will <strong>NOT</strong> see your email.
+              For security purposes only. The car owner will <strong>NOT</strong> see your information.
             </p>
-            <form onSubmit={handleEmailSubmit}>
+            <form onSubmit={handleFormSubmit}>
+              <input
+                type="text"
+                required
+                placeholder="Your name"
+                value={name}
+                onChange={(e) => setName(e.target.value)}
+                style={styles.input}
+              />
               <input
                 type="email"
                 required
@@ -183,7 +129,7 @@ export default function ScanPage({ params }: { params: { "qr-id": string } }) {
                 style={styles.input}
               />
               <button type="submit" style={styles.primaryBtn}>
-                Continue →
+                Proceed →
               </button>
             </form>
           </div>
@@ -194,65 +140,7 @@ export default function ScanPage({ params }: { params: { "qr-id": string } }) {
     );
   }
 
-  // ─── ACTION BUTTONS ──────────────────────────
-  return (
-    <div style={styles.page}>
-      <div style={styles.container}>
-        <div style={styles.logo}>
-          <div style={styles.logoIcon}>P</div>
-          <span style={styles.logoText}>ParkPing</span>
-        </div>
 
-        <div style={styles.vehicleBanner}>
-          <h2 style={{ fontSize: 20, fontWeight: 700, color: "#fff", marginBottom: 4 }}>
-            {vehicle?.make} {vehicle?.model}
-          </h2>
-          <p style={{ color: "#ccc", fontSize: 14 }}>{vehicle?.color || ""}</p>
-        </div>
-
-        <div style={{ padding: "24px 20px" }}>
-          <h3 style={{ fontSize: 18, fontWeight: 700, textAlign: "center", color: "#1A1A2E", marginBottom: 6 }}>
-            Contact the Owner
-          </h3>
-          <p style={{ fontSize: 13, color: "#888", textAlign: "center", marginBottom: 24 }}>
-            Choose how you&apos;d like to reach the car owner
-          </p>
-
-          {/* Alert Button */}
-          <button
-            onClick={handleSendAlert}
-            disabled={alertLoading || cooldown > 0}
-            style={{
-              ...styles.primaryBtn,
-              opacity: alertLoading || cooldown > 0 ? 0.6 : 1,
-              marginBottom: 12,
-              height: 64,
-              fontSize: 17,
-            }}
-          >
-            {alertLoading ? "Sending..." : cooldown > 0 ? `Next alert in ${formatCooldown(cooldown)}` : "🔔 Send Alert"}
-            {!alertLoading && cooldown <= 0 && (
-              <span style={{ display: "block", fontSize: 12, opacity: 0.8, marginTop: 2 }}>Notify owner instantly via push notification</span>
-            )}
-          </button>
-
-          {/* Chat Button */}
-          <button onClick={handleOpenChat} style={{ ...styles.secondaryBtn, height: 64, fontSize: 17 }}>
-            💬 Send Message
-            <span style={{ display: "block", fontSize: 12, opacity: 0.8, marginTop: 2 }}>Chat anonymously with owner</span>
-          </button>
-
-          {alertSent && (
-            <div style={{ marginTop: 16, padding: "12px 16px", background: "#f0fdf4", borderRadius: 12, border: "1px solid #bbf7d0" }}>
-              <p style={{ fontSize: 13, color: "#166534", fontWeight: 600 }}>✅ Alert sent successfully! The owner has been notified.</p>
-            </div>
-          )}
-        </div>
-
-        <p style={styles.disclaimer}>🛡️ Misuse of this service is logged and punishable.</p>
-      </div>
-    </div>
-  );
 }
 
 // ─── INLINE STYLES (zero external dependencies) ──

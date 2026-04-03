@@ -17,7 +17,7 @@ export async function POST(
   { params }: { params: { "qr-id": string } }
 ) {
   try {
-    const { scannerPhone } = await request.json();
+    const { scannerPhone, scannerName, contactMethod } = await request.json();
     const qrString = params["qr-id"];
 
     if (!scannerPhone) {
@@ -72,7 +72,8 @@ export async function POST(
       .insert({
         qr_id: qrCode.id,
         scanner_phone_hash: phoneHash,
-        contact_method: "alert",
+        scanner_name: scannerName || null,
+        contact_method: contactMethod || "alert",
         location_city: city,
         resolution_status: "pending",
       })

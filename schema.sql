@@ -33,7 +33,8 @@ CREATE TABLE IF NOT EXISTS scan_logs (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     qr_id UUID REFERENCES qr_codes(id) ON DELETE CASCADE,
     scanner_phone_hash TEXT,
-    contact_method TEXT CHECK (contact_method IN ('call', 'alert')),
+    scanner_name TEXT,
+    contact_method TEXT CHECK (contact_method IN ('call', 'alert', 'chat')),
     location_city TEXT,
     resolution_status TEXT DEFAULT 'pending' CHECK (resolution_status IN ('pending', 'resolved', 'no_response')),
     scanned_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
