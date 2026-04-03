@@ -29,7 +29,7 @@ Route (app)                              Size     First Load JS
 ├ ○ /auth/signup                         4.71 kB         213 kB
 ├ ƒ /chat/[scanId]                       3.03 kB         192 kB
 ├ ○ /contact                             3.85 kB         216 kB
-├ ƒ /dashboard                           7.95 kB         222 kB
+├ ƒ /dashboard                           7.92 kB         222 kB
 ├ ○ /onboarding                          7.82 kB         212 kB
 ├ ○ /order                               3.63 kB         216 kB
 ├ ○ /privacy                             1.07 kB         213 kB

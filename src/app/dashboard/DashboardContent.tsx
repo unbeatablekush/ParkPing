@@ -299,7 +299,6 @@ export default function DashboardContent({ tab }: DashboardContentProps) {
                       level="H"
                       includeMargin={true}
                     />
-                    <p className="text-[10px] text-gray-400 font-mono mt-1">{qr.qr_code_string}</p>
                   </div>
                   <div className="flex gap-2">
                     <Button
