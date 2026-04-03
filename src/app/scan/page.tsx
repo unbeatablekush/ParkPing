@@ -16,12 +16,10 @@ function ScanContent() {
   const router = useRouter();
   const code = searchParams.get("code") || "";
 
-  const [page, setPage] = useState<"loading" | "notfound" | "nocode" | "email" | "actions">("loading");
+  const [page, setPage] = useState<"loading" | "notfound" | "nocode" | "form">("loading");
   const [vehicle, setVehicle] = useState<VehicleData | null>(null);
+  const [name, setName] = useState("");
   const [email, setEmail] = useState("");
-  const [alertLoading, setAlertLoading] = useState(false);
-  const [alertSent, setAlertSent] = useState(false);
-  const [cooldownSec, setCooldownSec] = useState(0);
 
   // If no code in URL
   useEffect(() => {
@@ -37,63 +35,19 @@ function ScanContent() {
       })
       .then((d) => {
         setVehicle(d);
-        setPage("email");
+        setPage("form");
       })
       .catch(() => setPage("notfound"));
   }, [code]);
 
-  // Cooldown countdown
-  useEffect(() => {
-    if (cooldownSec <= 0) return;
-    const t = setInterval(() => setCooldownSec((c) => c - 1), 1000);
-    return () => clearInterval(t);
-  }, [cooldownSec]);
-
-  const submitEmail = (e: React.FormEvent) => {
+  const submitForm = (e: React.FormEvent) => {
     e.preventDefault();
-    if (!email.includes("@")) return;
+    if (!name.trim() || !email.includes("@")) return;
+    sessionStorage.setItem("scanner_name", name.trim());
     sessionStorage.setItem("scanner_email", email);
-    setPage("actions");
+    sessionStorage.setItem("vehicle_data", JSON.stringify(vehicle));
+    router.push(`/scan/${code}/connect`);
   };
-
-  const sendAlert = async () => {
-    if (alertLoading || cooldownSec > 0) return;
-    setAlertLoading(true);
-    try {
-      const r = await fetch(`/api/scan/${code}/alert`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ scannerPhone: email }),
-      });
-      const d = await r.json();
-      if (!r.ok) { alert(d.error || "Failed"); setAlertLoading(false); return; }
-      setAlertSent(true);
-      setCooldownSec(240);
-      setAlertLoading(false);
-      router.push(`/scan/waiting?alertId=${d.alertId}&scanId=${d.scanId}&code=${code}`);
-    } catch {
-      alert("Something went wrong.");
-      setAlertLoading(false);
-    }
-  };
-
-  const openChat = async () => {
-    try {
-      const r = await fetch(`/api/scan/${code}/alert`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ scannerPhone: email, contactMethod: "chat" }),
-      });
-      const d = await r.json();
-      if (r.ok && d.scanId) {
-        router.push(`/chat/${d.scanId}?role=scanner`);
-        return;
-      }
-    } catch { /* fallback */ }
-    alert("Unable to start chat.");
-  };
-
-  const fmtCooldown = (s: number) => `${Math.floor(s / 60)}:${(s % 60).toString().padStart(2, "0")}`;
 
   // ─── SHARED HEADER ──────────────────────────
   const Header = () => (
@@ -146,17 +100,25 @@ function ScanContent() {
     </div></div>
   );
 
-  // ─── EMAIL ──────────────────────────────────
-  if (page === "email") return (
+  // ─── FORM ──────────────────────────────────
+  if (page === "form") return (
     <div style={S.page}><div style={S.card}>
       <Header />
       <VehicleBanner />
       <div style={{ padding: "28px 24px" }}>
-        <h3 style={{ fontSize: 19, fontWeight: 700, color: "#1A1A2E", marginBottom: 6 }}>Enter your email to proceed</h3>
+        <h3 style={{ fontSize: 19, fontWeight: 700, color: "#1A1A2E", marginBottom: 6 }}>Enter your details to proceed</h3>
         <p style={{ fontSize: 13, color: "#999", marginBottom: 24, lineHeight: 1.6 }}>
-          Just for identification. The car owner will <b>never</b> see your email.
+          Just for identification. The car owner will <b>never</b> see your information.
         </p>
-        <form onSubmit={submitEmail}>
+        <form onSubmit={submitForm}>
+          <input
+            type="text"
+            required
+            placeholder="Your name"
+            value={name}
+            onChange={(e) => setName(e.target.value)}
+            style={{ width: "100%", height: 52, borderRadius: 14, border: "2px solid #e8e8e8", padding: "0 16px", fontSize: 16, outline: "none", boxSizing: "border-box", fontFamily: "inherit", marginBottom: 16 }}
+          />
           <input
             type="email"
             required
@@ -174,44 +136,7 @@ function ScanContent() {
     </div></div>
   );
 
-  // ─── ACTIONS ────────────────────────────────
-  return (
-    <div style={S.page}><div style={S.card}>
-      <Header />
-      <VehicleBanner />
-      <div style={{ padding: "28px 24px" }}>
-        <h3 style={{ fontSize: 19, fontWeight: 700, textAlign: "center", color: "#1A1A2E", marginBottom: 4 }}>Contact the Owner</h3>
-        <p style={{ fontSize: 13, color: "#999", textAlign: "center", marginBottom: 28 }}>Choose how you&apos;d like to reach them</p>
 
-        {/* ALERT BUTTON */}
-        <button
-          onClick={sendAlert}
-          disabled={alertLoading || cooldownSec > 0}
-          style={{ ...S.orangeBtn, height: 72, fontSize: 18, marginBottom: 14, opacity: (alertLoading || cooldownSec > 0) ? 0.5 : 1 }}
-        >
-          <span style={{ display: "block" }}>
-            {alertLoading ? "Sending..." : cooldownSec > 0 ? `⏳ Next alert in ${fmtCooldown(cooldownSec)}` : "🔔  Send Alert"}
-          </span>
-          {!alertLoading && cooldownSec <= 0 && (
-            <span style={{ display: "block", fontSize: 12, opacity: 0.85, marginTop: 4, fontWeight: 400 }}>Instantly notifies the car owner</span>
-          )}
-        </button>
-
-        {/* CHAT BUTTON */}
-        <button onClick={openChat} style={{ ...S.navyBtn, height: 72, fontSize: 18 }}>
-          <span style={{ display: "block" }}>💬  Send Message</span>
-          <span style={{ display: "block", fontSize: 12, opacity: 0.85, marginTop: 4, fontWeight: 400 }}>Chat anonymously with the owner</span>
-        </button>
-
-        {alertSent && (
-          <div style={{ marginTop: 20, padding: "14px 18px", background: "#f0fdf4", borderRadius: 14, border: "1px solid #bbf7d0" }}>
-            <p style={{ fontSize: 13, color: "#166534", fontWeight: 600 }}>✅ Alert sent! The owner has been notified.</p>
-          </div>
-        )}
-      </div>
-      <p style={S.footer}>🛡️ Misuse is strictly logged and punishable</p>
-    </div></div>
-  );
 }
 
 // Wrap in Suspense for useSearchParams
