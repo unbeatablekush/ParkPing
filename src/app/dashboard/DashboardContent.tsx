@@ -753,8 +753,8 @@ export default function DashboardContent({ tab }: DashboardContentProps) {
   const renderAlerts = () => {
     const twelveHoursAgo = new Date(Date.now() - 12 * 60 * 60 * 1000);
     const visibleAlerts = alerts.filter((a) => new Date(a.created_at) >= twelveHoursAgo);
-    const pendingAlerts = visibleAlerts.filter((a) => a.status === 'pending');
-    const pastAlerts = visibleAlerts.filter((a) => a.status !== 'pending');
+    const pendingAlerts = visibleAlerts.filter((a) => ['pending', 'reviewed'].includes(a.status));
+    const pastAlerts = visibleAlerts.filter((a) => !['pending', 'reviewed'].includes(a.status));
     const resolvedCount = visibleAlerts.filter((a) => a.status === 'coming').length;
     const avgResponseMins = visibleAlerts.length > 0 ? Math.round(visibleAlerts.filter((a) => a.status === 'coming').length * 3.5) : 0;
 
@@ -801,7 +801,9 @@ export default function DashboardContent({ tab }: DashboardContentProps) {
                       <h4 className="font-bold text-lg text-gray-900">🚨 Your car needs to be moved!</h4>
                       <p className="text-sm text-gray-500">{alert.vehicle_make} {alert.vehicle_model} • {new Date(alert.created_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</p>
                     </div>
-                    <span className="px-3 py-1 bg-red-100 text-red-700 rounded-full text-xs font-bold uppercase">Pending</span>
+                    <span className={`px-3 py-1 rounded-full text-xs font-bold uppercase ${alert.status === 'pending' ? 'bg-red-100 text-red-700' : 'bg-blue-100 text-blue-700'}`}>
+                      {alert.status === 'pending' ? 'NEW' : 'SEEN'}
+                    </span>
                   </div>
 
                   {/* ETA Picker */}
