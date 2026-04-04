@@ -20,6 +20,8 @@ const navItems = [
 export default function DashboardLayout({ children }: { children: React.ReactNode }) {
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [profile, setProfile] = useState<{ full_name?: string; phone?: string; email?: string } | null>(null);
+  const [hasAlertDot, setHasAlertDot] = useState(false);
+  const [hasMessageDot, setHasMessageDot] = useState(false);
 
   // Initialize FCM on dashboard mount
   useFCMToken();
@@ -49,12 +51,10 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
     const supabase = createClient();
     const { data: { session } } = await supabase.auth.getSession();
     if (session) {
+      setProfile({ full_name: session.user.user_metadata?.full_name || '', email: session.user.email || '', phone: '' });
       const { data } = await supabase.from('profiles').select('full_name, phone, email').eq('id', session.user.id).single();
       if (data) {
         setProfile(data);
-      } else {
-        // Profile row might not exist yet — show email from auth
-        setProfile({ full_name: session.user.user_metadata?.full_name || '', email: session.user.email || '', phone: '' });
       }
     }
   }, []);
@@ -62,6 +62,39 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
   useEffect(() => {
     fetchProfile();
   }, [fetchProfile]);
+
+  useEffect(() => {
+    const fetchNotifications = async () => {
+      const supabase = createClient();
+      const { data: { session } } = await supabase.auth.getSession();
+      if (!session) return;
+
+      const { data: vehicles } = await supabase.from('vehicles').select('id').eq('user_id', session.user.id);
+      if (!vehicles || vehicles.length === 0) return;
+
+      const vehicleIds = vehicles.map((v: { id: string }) => v.id);
+      const { data: qrCodes } = await supabase.from('qr_codes').select('id').in('vehicle_id', vehicleIds);
+      if (!qrCodes || qrCodes.length === 0) return;
+
+      const qrIds = qrCodes.map((q: { id: string }) => q.id);
+      const { data: scanLogs } = await supabase.from('scan_logs').select('id').in('qr_id', qrIds);
+      if (!scanLogs || scanLogs.length === 0) return;
+
+      const scanIds = scanLogs.map((s: { id: string }) => s.id);
+      const twelveHoursAgo = new Date(Date.now() - 12 * 60 * 60 * 1000).toISOString();
+      const tenHoursAgo = new Date(Date.now() - 10 * 60 * 60 * 1000).toISOString();
+
+      const [{ count: alertCount }, { count: messageCount }] = await Promise.all([
+        supabase.from('alerts').select('id', { count: 'exact', head: true }).in('scan_id', scanIds).gte('created_at', twelveHoursAgo),
+        supabase.from('messages').select('id', { count: 'exact', head: true }).in('scan_id', scanIds).eq('sender_type', 'scanner').gte('created_at', tenHoursAgo),
+      ]);
+
+      setHasAlertDot((alertCount || 0) > 0);
+      setHasMessageDot((messageCount || 0) > 0);
+    };
+
+    fetchNotifications();
+  }, []);
 
   const handleLogout = async () => {
     const supabase = createClient();
@@ -107,16 +140,20 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
         </div>
 
         <nav className="flex-1 px-4 py-8 space-y-2 overflow-y-auto">
-          {navItems.map((item) => (
-            <a
-              key={item.name}
-              href={item.href}
-              className="flex items-center gap-3 px-4 py-3 rounded-xl font-medium transition-colors text-gray-600 hover:bg-primary/5 hover:text-primary"
-            >
-              <item.icon className="w-5 h-5 opacity-70" />
-              {item.name}
-            </a>
-          ))}
+          {navItems.map((item) => {
+            const showDot = item.name === 'Alerts' ? hasAlertDot : item.name === 'Messages' ? hasMessageDot : false;
+            return (
+              <a
+                key={item.name}
+                href={item.href}
+                className="flex items-center gap-3 px-4 py-3 rounded-xl font-medium transition-colors text-gray-600 hover:bg-primary/5 hover:text-primary"
+              >
+                <item.icon className="w-5 h-5 opacity-70" />
+                <span>{item.name}</span>
+                {showDot && <span className="ml-auto h-2.5 w-2.5 rounded-full bg-orange-500" />}
+              </a>
+            );
+          })}
         </nav>
 
         <div className="p-4 border-t border-gray-100">

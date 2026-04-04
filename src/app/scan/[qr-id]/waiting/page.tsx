@@ -14,10 +14,12 @@ export default function WaitingPage({ params }: { params: { "qr-id": string } })
   const scanId = searchParams.get("scanId");
   const qrString = params["qr-id"];
 
-  const [status, setStatus] = useState<"waiting" | "coming" | "busy" | "expired" | "no_response_timeout">("waiting");
+  const [status, setStatus] = useState<"waiting" | "coming" | "busy" | "expired">("waiting");
   const [eta, setEta] = useState<number | null>(null);
   const [busyReason, setBusyReason] = useState<string | null>(null);
   const [minutesAgo, setMinutesAgo] = useState(0);
+  const [secondsWaited, setSecondsWaited] = useState(0);
+  const [canChat, setCanChat] = useState(false);
   const [startTime] = useState(Date.now());
 
   // Timer for "Sent X minutes ago"
@@ -28,15 +30,18 @@ export default function WaitingPage({ params }: { params: { "qr-id": string } })
     return () => clearInterval(interval);
   }, [startTime]);
 
-  // 30-second timeout for showing chat button
+  // 30-second countdown for chat button
   useEffect(() => {
-    let secondsWaited = 0;
+    if (status !== "waiting") return;
     const interval = setInterval(() => {
-      secondsWaited += 1;
-      if (secondsWaited === 30 && status === "waiting") {
-        setStatus("no_response_timeout");
-        clearInterval(interval);
-      }
+      setSecondsWaited((prev) => {
+        const next = prev + 1;
+        if (next >= 30) {
+          setCanChat(true);
+          clearInterval(interval);
+        }
+        return next;
+      });
     }, 1000);
     return () => clearInterval(interval);
   }, [status]);
@@ -115,6 +120,21 @@ export default function WaitingPage({ params }: { params: { "qr-id": string } })
                 <Clock className="w-3.5 h-3.5" />
                 <span>Sent {minutesAgo === 0 ? "just now" : `${minutesAgo} min ago`}</span>
               </div>
+              <div className="mt-6 text-sm text-gray-600">
+                {canChat ? (
+                  <span className="font-semibold text-secondary">You can now send a message to the owner.</span>
+                ) : (
+                  <span>Chat becomes available in {30 - secondsWaited} second{secondsWaited === 29 ? "" : "s"}.</span>
+                )}
+              </div>
+              {canChat && (
+                <Button
+                  className="mt-6 w-full h-14 bg-blue-600 hover:bg-blue-700 text-white"
+                  onClick={() => router.push(`/chat/${scanId}?role=scanner`)}
+                >
+                  <MessageCircle className="mr-2 w-5 h-5" /> Chat with Owner 💬
+                </Button>
+              )}
             </div>
           )}
 

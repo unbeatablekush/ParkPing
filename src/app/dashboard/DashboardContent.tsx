@@ -31,6 +31,19 @@ interface QRCodeData {
   delivery_status?: string;
 }
 
+interface AlertRecord {
+  id: string;
+  scan_id: string;
+  alert_type: string;
+  status: string;
+  eta_minutes: number | null;
+  owner_response: string | null;
+  created_at: string;
+  vehicle_make?: string;
+  vehicle_model?: string;
+  scan_created_at?: string;
+}
+
 interface Message {
   id: string;
   scan_id: string;
@@ -38,6 +51,7 @@ interface Message {
   content: string;
   is_read: boolean;
   created_at: string;
+  scan_created_at?: string;
   vehicle_make?: string;
   vehicle_model?: string;
   scanner_name?: string;
@@ -47,7 +61,22 @@ interface ScanLog {
   id: string;
   qr_id: string;
   scanner_name?: string;
+  scanned_at?: string;
+  contact_method?: string;
+  resolution_status?: string;
   [key: string]: unknown;
+}
+
+interface ScanHistoryItem {
+  id: string;
+  scan_id: string;
+  qr_id: string;
+  scanner_name?: string;
+  contact_method?: string;
+  resolution_status?: string;
+  scanned_at: string;
+  vehicle_make?: string;
+  vehicle_model?: string;
 }
 
 interface QRCode {
@@ -75,15 +104,19 @@ export default function DashboardContent({ tab }: DashboardContentProps) {
   const [totalScans, setTotalScans] = useState(0);
   const [alertsReceived, setAlertsReceived] = useState(0);
   const [callsReceived, setCallsReceived] = useState(0);
-  const [alerts, setAlerts] = useState<Array<{id: string; scan_id: string; alert_type: string; status: string; eta_minutes: number | null; owner_response: string | null; created_at: string; vehicle_make?: string; vehicle_model?: string}>>([]);
+  const [alerts, setAlerts] = useState<AlertRecord[]>([]);
   const [respondingTo, setRespondingTo] = useState<string | null>(null);
   const [showEtaPicker, setShowEtaPicker] = useState(false);
   const [etaAlertId, setEtaAlertId] = useState<string | null>(null);
   
-  const [messages, setMessages] = useState<Array<{id: string; scan_id: string; sender_type: "scanner" | "owner"; content: string; is_read: boolean; created_at: string; vehicle_make?: string; vehicle_model?: string; scanner_name?: string}>>([]);
+  const [messages, setMessages] = useState<Message[]>([]);
   const [selectedConversation, setSelectedConversation] = useState<string | null>(null);
   const [messageInput, setMessageInput] = useState("");
   const [sendingMessage, setSendingMessage] = useState(false);
+  const [scanHistory, setScanHistory] = useState<ScanHistoryItem[]>([]);
+  const [latestScans, setLatestScans] = useState<ScanHistoryItem[]>([]);
+  const [hasRecentAlerts, setHasRecentAlerts] = useState(false);
+  const [hasRecentMessages, setHasRecentMessages] = useState(false);
   
   const [fullName, setFullName] = useState("");
   const [age, setAge] = useState("");
@@ -127,10 +160,17 @@ export default function DashboardContent({ tab }: DashboardContentProps) {
         const { data: qrCodes } = await supabase.from('qr_codes').select('id, vehicle_id').in('vehicle_id', vehicleIds);
         if (qrCodes && qrCodes.length > 0) {
           const qrIds = qrCodes.map((q: { id: string }) => q.id);
-          const { data: scanLogs } = await supabase.from('scan_logs').select('id, qr_id').in('qr_id', qrIds);
-          setTotalScans(scanLogs?.length || 0);
-          if (scanLogs && scanLogs.length > 0) {
-            const scanIds = scanLogs.map((s: { id: string }) => s.id);
+          const scanLogsResponse = await supabase
+            .from('scan_logs')
+            .select('id, qr_id, scanner_name, contact_method, resolution_status, scanned_at')
+            .in('qr_id', qrIds)
+            .order('scanned_at', { ascending: false });
+
+          const scans = (scanLogsResponse.data || []) as ScanLog[];
+          setTotalScans(scans.length);
+
+          if (scans.length > 0) {
+            const scanIds = scans.map((s: { id: string }) => s.id);
             const { data: alertsData } = await supabase.from('alerts').select('*').in('scan_id', scanIds).order('created_at', { ascending: false });
             setAlertsReceived(alertsData?.length || 0);
 
@@ -138,27 +178,65 @@ export default function DashboardContent({ tab }: DashboardContentProps) {
             setCallsReceived(callsData?.length || 0);
 
             if (alertsData) {
-            
-              const enriched = alertsData.map((a: { scan_id: string; [key: string]: unknown }) => {
-                const scan = scanLogs.find((s: { id: string }) => s.id === a.scan_id);
+              const enriched = alertsData.map((a: AlertRecord) => {
+                const scan = scans.find((s: { id: string }) => s.id === a.scan_id);
                 const qr = qrCodes.find((q: { id: string }) => q.id === scan?.qr_id);
                 const veh = vehiclesData.find((v: Vehicle) => v.id === qr?.vehicle_id);
-                return { ...a, vehicle_make: veh?.make, vehicle_model: veh?.model };
+                return {
+                  ...a,
+                  vehicle_make: veh?.make,
+                  vehicle_model: veh?.model,
+                  scan_created_at: scan?.scanned_at as string | undefined,
+                };
               });
               setAlerts(enriched);
             }
+
+            // Prepare full scan history and recent scans
+            const enrichedScanHistory: ScanHistoryItem[] = scans.map((scan) => {
+              const qr = qrCodes.find((q: { id: string }) => q.id === scan.qr_id);
+              const veh = vehiclesData.find((v: Vehicle) => v.id === qr?.vehicle_id);
+              return {
+                id: scan.id,
+                scan_id: scan.id,
+                qr_id: scan.qr_id,
+                scanner_name: scan.scanner_name as string | undefined,
+                contact_method: scan.contact_method as string | undefined,
+                resolution_status: scan.resolution_status as string | undefined,
+                scanned_at: scan.scanned_at as string,
+                vehicle_make: veh?.make,
+                vehicle_model: veh?.model,
+              };
+            });
+            setScanHistory(enrichedScanHistory);
+            setLatestScans(enrichedScanHistory.slice(0, 3));
 
             // Fetch messages for all scan IDs
             const { data: messagesData } = await supabase.from('messages').select('*').in('scan_id', scanIds).order('created_at', { ascending: false });
             if (messagesData) {
               const enrichedMessages = messagesData.map((msg: Message) => {
-                const scan = scanLogs.find((s: { id: string }) => s.id === msg.scan_id) as ScanLog | undefined;
+                const scan = scans.find((s: { id: string }) => s.id === msg.scan_id) as ScanLog | undefined;
                 const qr = qrCodes.find((q: { id: string }) => q.id === scan?.qr_id) as QRCode | undefined;
                 const veh = vehiclesData.find((v: Vehicle) => v.id === qr?.vehicle_id);
-                return { ...msg, vehicle_make: veh?.make, vehicle_model: veh?.model, scanner_name: scan?.scanner_name };
+                return {
+                  ...msg,
+                  vehicle_make: veh?.make,
+                  vehicle_model: veh?.model,
+                  scanner_name: scan?.scanner_name,
+                  scan_created_at: scan?.scanned_at as string | undefined,
+                };
               });
               setMessages(enrichedMessages);
             }
+
+            const tenHoursAgo = new Date(Date.now() - 10 * 60 * 60 * 1000);
+            const twelveHoursAgo = new Date(Date.now() - 12 * 60 * 60 * 1000);
+            setHasRecentMessages(
+              messagesData?.some((msg: Message) => msg.sender_type === 'scanner' && new Date(msg.created_at) >= tenHoursAgo) || false
+            );
+            setHasRecentAlerts(
+              alertsData?.some((alert: AlertRecord) => new Date(alert.created_at) >= twelveHoursAgo) || false
+            );
           }
         }
       }
@@ -376,9 +454,30 @@ export default function DashboardContent({ tab }: DashboardContentProps) {
       <div>
         <h3 className="text-xl font-bold text-secondary mb-4">Recent Scan Activity</h3>
         <Card>
-          <div className="divide-y divide-gray-100 p-8 text-center text-gray-500">
-             No recent scans to display. Your car is safe!
-          </div>
+          {latestScans.length === 0 ? (
+            <div className="divide-y divide-gray-100 p-8 text-center text-gray-500">
+              No recent scans to display. Your car is safe!
+            </div>
+          ) : (
+            <div className="divide-y divide-gray-100">
+              {latestScans.map((scan) => (
+                <div key={scan.id} className="p-6 grid grid-cols-1 sm:grid-cols-3 gap-4 items-center">
+                  <div>
+                    <p className="text-sm text-gray-500">Vehicle</p>
+                    <p className="font-semibold text-gray-900">{scan.vehicle_make} {scan.vehicle_model}</p>
+                  </div>
+                  <div>
+                    <p className="text-sm text-gray-500">Scanner</p>
+                    <p className="font-semibold text-gray-900">{scan.scanner_name || 'Anonymous'}</p>
+                  </div>
+                  <div className="text-right">
+                    <p className="text-sm text-gray-500">{new Date(scan.scanned_at).toLocaleDateString()}</p>
+                    <p className="text-xs text-gray-400">{new Date(scan.scanned_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</p>
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
           <div className="p-4 bg-gray-50 border-t border-gray-100 rounded-b-2xl text-center">
             <Link href="/dashboard?tab=history" className="text-primary hover:text-primary-hover font-semibold text-sm">
               View All History →
@@ -525,17 +624,40 @@ export default function DashboardContent({ tab }: DashboardContentProps) {
               <tr className="bg-gray-50 border-b border-gray-100">
                 <th className="py-4 px-6 font-semibold text-gray-600 text-sm w-1/4">Date & Time</th>
                 <th className="py-4 px-6 font-semibold text-gray-600 text-sm">Vehicle</th>
+                <th className="py-4 px-6 font-semibold text-gray-600 text-sm">Scanner</th>
                 <th className="py-4 px-6 font-semibold text-gray-600 text-sm">Method</th>
-                <th className="py-4 px-6 font-semibold text-gray-600 text-sm">Location</th>
                 <th className="py-4 px-6 font-semibold text-gray-600 text-sm w-1/6">Status</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-gray-100">
+              {scanHistory.length === 0 ? (
                <tr>
                  <td colSpan={5} className="py-8 text-center text-gray-500">
                     No scan history available for your vehicles.
                  </td>
                </tr>
+              ) : (
+                scanHistory.map((scan) => (
+                  <tr key={scan.id}>
+                    <td className="py-4 px-6 text-sm text-gray-600">
+                      {new Date(scan.scanned_at).toLocaleDateString()}<br />
+                      <span className="text-xs text-gray-400">{new Date(scan.scanned_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</span>
+                    </td>
+                    <td className="py-4 px-6 text-sm text-gray-900">{scan.vehicle_make} {scan.vehicle_model}</td>
+                    <td className="py-4 px-6 text-sm text-gray-700">{scan.scanner_name || 'Anonymous'}</td>
+                    <td className="py-4 px-6 text-sm text-gray-700 capitalize">{scan.contact_method || 'alert'}</td>
+                    <td className="py-4 px-6 text-sm font-semibold uppercase">
+                      <span className={`px-2 py-1 rounded-full text-xs ${
+                        scan.resolution_status === 'pending' ? 'bg-orange-100 text-orange-700' :
+                        scan.resolution_status === 'resolved' ? 'bg-green-100 text-green-700' :
+                        'bg-gray-100 text-gray-700'
+                      }`}>
+                        {scan.resolution_status || 'pending'}
+                      </span>
+                    </td>
+                  </tr>
+                ))
+              )}
             </tbody>
           </table>
         </div>
@@ -655,10 +777,12 @@ export default function DashboardContent({ tab }: DashboardContentProps) {
   };
 
   const renderAlerts = () => {
-    const pendingAlerts = alerts.filter(a => a.status === 'pending');
-    const pastAlerts = alerts.filter(a => a.status !== 'pending');
-    const resolvedCount = alerts.filter(a => a.status === 'coming').length;
-    const avgResponseMins = alerts.length > 0 ? Math.round(alerts.filter(a => a.status === 'coming').length * 3.5) : 0;
+    const twelveHoursAgo = new Date(Date.now() - 12 * 60 * 60 * 1000);
+    const visibleAlerts = alerts.filter((a) => new Date(a.created_at) >= twelveHoursAgo);
+    const pendingAlerts = visibleAlerts.filter((a) => a.status === 'pending');
+    const pastAlerts = visibleAlerts.filter((a) => a.status !== 'pending');
+    const resolvedCount = visibleAlerts.filter((a) => a.status === 'coming').length;
+    const avgResponseMins = visibleAlerts.length > 0 ? Math.round(visibleAlerts.filter((a) => a.status === 'coming').length * 3.5) : 0;
 
     return (
       <div className="space-y-6 animate-in fade-in duration-500">
@@ -672,7 +796,7 @@ export default function DashboardContent({ tab }: DashboardContentProps) {
           <Card className="border-0 shadow-sm border-b-[3px] border-b-orange-300">
             <CardContent className="p-6">
               <p className="text-sm font-medium text-gray-500 mb-1">Total Alerts</p>
-              <h3 className="text-3xl font-bold text-gray-900">{alerts.length}</h3>
+              <h3 className="text-3xl font-bold text-gray-900">{visibleAlerts.length}</h3>
             </CardContent>
           </Card>
           <Card className="border-0 shadow-sm border-b-[3px] border-b-green-300">
@@ -829,8 +953,13 @@ export default function DashboardContent({ tab }: DashboardContentProps) {
   };
 
   const renderMessages = () => {
+    const tenHoursAgo = new Date(Date.now() - 10 * 60 * 60 * 1000);
+    const recentMessages = messages.filter((msg) => {
+      return msg.scan_created_at ? new Date(msg.scan_created_at) >= tenHoursAgo : true;
+    });
+
     // Group messages by scan_id to show conversations
-    const conversations = messages.reduce((acc: Record<string, Message[]>, msg: Message) => {
+    const conversations = recentMessages.reduce((acc: Record<string, Message[]>, msg: Message) => {
       const scanId = msg.scan_id;
       if (!acc[scanId]) acc[scanId] = [];
       acc[scanId].push(msg);
