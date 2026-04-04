@@ -14,7 +14,7 @@ export default function WaitingPage({ params }: { params: { "qr-id": string } })
   const scanId = searchParams.get("scanId");
   const qrString = params["qr-id"];
 
-  const [status, setStatus] = useState<"waiting" | "coming" | "busy" | "expired">("waiting");
+  const [status, setStatus] = useState<"waiting" | "coming" | "busy" | "expired" | "no_response_timeout">("waiting");
   const [eta, setEta] = useState<number | null>(null);
   const [busyReason, setBusyReason] = useState<string | null>(null);
   const [minutesAgo, setMinutesAgo] = useState(0);

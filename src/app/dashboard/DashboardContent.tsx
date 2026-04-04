@@ -4,7 +4,7 @@ import { useState, useEffect, useCallback } from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/Card";
 import { Button } from "@/components/ui/Button";
 import { useToast } from "@/components/ui/ToastProvider";
-import { Plus, QrCode, BellRing, Clock, MessageCircle, CheckCircle2, Download } from "lucide-react";
+import { Plus, BellRing, Clock, MessageCircle, CheckCircle2, Download } from "lucide-react";
 import Link from "next/link";
 import { createClient } from "@/lib/supabase/client";
 import { QRCodeSVG } from "qrcode.react";
@@ -115,9 +115,6 @@ export default function DashboardContent({ tab }: DashboardContentProps) {
   const [sendingMessage, setSendingMessage] = useState(false);
   const [scanHistory, setScanHistory] = useState<ScanHistoryItem[]>([]);
   const [latestScans, setLatestScans] = useState<ScanHistoryItem[]>([]);
-  const [hasRecentAlerts, setHasRecentAlerts] = useState(false);
-  const [hasRecentMessages, setHasRecentMessages] = useState(false);
-  
   const [fullName, setFullName] = useState("");
   const [age, setAge] = useState("");
   const [gender, setGender] = useState("");
@@ -228,20 +225,11 @@ export default function DashboardContent({ tab }: DashboardContentProps) {
               });
               setMessages(enrichedMessages);
             }
-
-            const tenHoursAgo = new Date(Date.now() - 10 * 60 * 60 * 1000);
-            const twelveHoursAgo = new Date(Date.now() - 12 * 60 * 60 * 1000);
-            setHasRecentMessages(
-              messagesData?.some((msg: Message) => msg.sender_type === 'scanner' && new Date(msg.created_at) >= tenHoursAgo) || false
-            );
-            setHasRecentAlerts(
-              alertsData?.some((alert: AlertRecord) => new Date(alert.created_at) >= twelveHoursAgo) || false
-            );
           }
         }
       }
     }
-  }, []);
+  }, [profile]);
 
   useEffect(() => {
     fetchData();
@@ -540,7 +528,7 @@ export default function DashboardContent({ tab }: DashboardContentProps) {
               </div>
             </CardHeader>
             <CardContent className="pt-6">
-              {qr?.qr_code_string ? (
+              {qr?.qr_code_string && (
                 <div className="text-center">
                   <div className="bg-white border-2 border-gray-100 rounded-xl p-4 inline-block shadow-sm mb-4" id={`qr-${v.id}`}>
                     <QRCodeSVG
@@ -586,26 +574,11 @@ export default function DashboardContent({ tab }: DashboardContentProps) {
                     </Button>
                   </div>
                 </div>
-              ) : (
-                <div className="flex items-center justify-between">
-                  <div className="flex items-center gap-3">
-                     <div className="w-12 h-12 bg-gray-100 rounded-xl flex items-center justify-center border border-gray-200">
-                       <QrCode className="w-6 h-6 text-gray-500" />
-                     </div>
-                     <div>
-                       <p className="text-sm font-bold text-gray-900">QR Code</p>
-                       <p className="text-xs text-gray-500 font-medium">Not generated yet</p>
-                     </div>
-                  </div>
-                  <Link href="/order">
-                    <Button variant="primary" size="sm">Order Sticker</Button>
-                  </Link>
-                </div>
               )}
             </CardContent>
           </Card>
-        );}))
-        }
+        );
+        }))}
       </div>
     </div>
   );

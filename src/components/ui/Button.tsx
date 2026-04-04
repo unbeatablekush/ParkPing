@@ -47,7 +47,7 @@ const Button = forwardRef<HTMLButtonElement, ButtonProps>(
       >
         {isLoading && <Loader2 className="mr-2 h-5 w-5 animate-spin" />}
         <span className={cn("inline-flex items-center gap-2", isLoading && "opacity-80")}>
-          {children}
+          {children as React.ReactNode}
         </span>
       </motion.button>
     );
