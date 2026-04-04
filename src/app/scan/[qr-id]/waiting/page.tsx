@@ -16,7 +16,6 @@ export default function WaitingPage({ params }: { params: { "qr-id": string } })
 
   const [status, setStatus] = useState<"waiting" | "coming" | "busy" | "expired" | "no_response_timeout">("waiting");
   const [eta, setEta] = useState<number | null>(null);
-  const [busyReason, setBusyReason] = useState<string | null>(null);
   const [minutesAgo, setMinutesAgo] = useState(0);
   const [secondsWaited, setSecondsWaited] = useState(0);
   const [canChat, setCanChat] = useState(false);
@@ -76,7 +75,6 @@ export default function WaitingPage({ params }: { params: { "qr-id": string } })
             setEta(updated.eta_minutes || null);
           } else if (updated.status === "busy") {
             setStatus("busy");
-            setBusyReason(updated.owner_response || null);
           } else if (updated.status === "chatting") {
             router.push(`/chat/${scanId}?role=scanner`);
           }
@@ -143,8 +141,8 @@ export default function WaitingPage({ params }: { params: { "qr-id": string } })
               <div className="w-24 h-24 bg-success/10 rounded-full flex items-center justify-center mb-6">
                 <CheckCircle2 className="w-12 h-12 text-success" />
               </div>
-              <h2 className="text-3xl font-bold text-gray-900 mb-2">Owner is on the way! 🎉</h2>
-              <p className="text-gray-500 text-lg mb-8">Please wait near your vehicle.</p>
+              <h2 className="text-3xl font-bold text-gray-900 mb-2">Wait, the car owner is coming! 🏃</h2>
+              <p className="text-gray-500 text-lg mb-8">They will be there in about {eta} minutes.</p>
 
               {eta && (
                 <div className="bg-gray-50 p-6 rounded-2xl border border-gray-100 w-full mb-8">
@@ -164,11 +162,8 @@ export default function WaitingPage({ params }: { params: { "qr-id": string } })
               <div className="w-20 h-20 bg-orange-100 rounded-full flex items-center justify-center mb-6">
                 <Clock className="w-10 h-10 text-orange-500" />
               </div>
-              <h2 className="text-2xl font-bold text-gray-900 mb-2">Owner is currently unavailable 😔</h2>
-              {busyReason && (
-                <p className="text-gray-500 mb-4 italic">&quot;{busyReason}&quot;</p>
-              )}
-              <p className="text-gray-500 mb-8 max-w-xs">You can try again later or send them a message.</p>
+              <h2 className="text-2xl font-bold text-gray-900 mb-2">Sorry, the owner is busy 😔</h2>
+              <p className="text-gray-500 mb-8 max-w-xs text-lg font-medium italic">They can&apos;t come to the car right now.</p>
               <div className="space-y-3 w-full">
                 <Button
                   className="w-full h-14 bg-orange-500 hover:bg-orange-600 text-white"

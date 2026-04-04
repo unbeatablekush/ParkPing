@@ -1,7 +1,8 @@
 "use client";
 
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, useRef } from "react";
 import Link from "next/link";
+import { useSearchParams } from "next/navigation";
 import { LayoutDashboard, CarFront, History, Settings, Menu, X, LogOut, BellRing, MessageCircle } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
 import { createClient } from "@/lib/supabase/client";
@@ -47,8 +48,12 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
     return () => unsubscribe();
   }, []);
 
+  const searchParams = useSearchParams();
+  const currentTab = searchParams.get("tab") || "overview";
+  const supabase = createClient();
+  const subscriptionRef = useRef<ReturnType<typeof supabase.channel> | null>(null);
+
   const fetchProfile = useCallback(async () => {
-    const supabase = createClient();
     const { data: { session } } = await supabase.auth.getSession();
     if (session) {
       setProfile({ full_name: session.user.user_metadata?.full_name || '', email: session.user.email || '', phone: '' });
@@ -57,44 +62,92 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
         setProfile(data);
       }
     }
-  }, []);
+  }, [supabase]);
+
+  const fetchNotifications = useCallback(async () => {
+    const { data: { session } } = await supabase.auth.getSession();
+    if (!session) return;
+
+    const { data: vehicles } = await supabase.from('vehicles').select('id').eq('user_id', session.user.id);
+    if (!vehicles || vehicles.length === 0) return;
+
+    const vehicleIds = vehicles.map((v: { id: string }) => v.id);
+    const { data: qrCodes } = await supabase.from('qr_codes').select('id').in('vehicle_id', vehicleIds);
+    if (!qrCodes || qrCodes.length === 0) return;
+
+    const qrIds = qrCodes.map((q: { id: string }) => q.id);
+    const { data: scanLogs } = await supabase.from('scan_logs').select('id').in('qr_id', qrIds);
+    if (!scanLogs || scanLogs.length === 0) return;
+
+    const scanIds = scanLogs.map((s: { id: string }) => s.id);
+
+    const [{ count: alertCount }, { count: messageCount }] = await Promise.all([
+      supabase.from('alerts').select('id', { count: 'exact', head: true }).in('scan_id', scanIds).eq('status', 'pending'),
+      supabase.from('messages').select('id', { count: 'exact', head: true }).in('scan_id', scanIds).eq('sender_type', 'scanner').eq('is_read', false),
+    ]);
+
+    setHasAlertDot((alertCount || 0) > 0);
+    setHasMessageDot((messageCount || 0) > 0);
+  }, [supabase]);
 
   useEffect(() => {
     fetchProfile();
   }, [fetchProfile]);
 
   useEffect(() => {
-    const fetchNotifications = async () => {
-      const supabase = createClient();
+    fetchNotifications();
+  }, [fetchNotifications]);
+
+  // Mark as read when tab is opened
+  useEffect(() => {
+    const markAsRead = async () => {
       const { data: { session } } = await supabase.auth.getSession();
       if (!session) return;
 
       const { data: vehicles } = await supabase.from('vehicles').select('id').eq('user_id', session.user.id);
       if (!vehicles || vehicles.length === 0) return;
-
       const vehicleIds = vehicles.map((v: { id: string }) => v.id);
       const { data: qrCodes } = await supabase.from('qr_codes').select('id').in('vehicle_id', vehicleIds);
       if (!qrCodes || qrCodes.length === 0) return;
-
       const qrIds = qrCodes.map((q: { id: string }) => q.id);
       const { data: scanLogs } = await supabase.from('scan_logs').select('id').in('qr_id', qrIds);
       if (!scanLogs || scanLogs.length === 0) return;
-
       const scanIds = scanLogs.map((s: { id: string }) => s.id);
-      const twelveHoursAgo = new Date(Date.now() - 12 * 60 * 60 * 1000).toISOString();
-      const tenHoursAgo = new Date(Date.now() - 10 * 60 * 60 * 1000).toISOString();
 
-      const [{ count: alertCount }, { count: messageCount }] = await Promise.all([
-        supabase.from('alerts').select('id', { count: 'exact', head: true }).in('scan_id', scanIds).gte('created_at', twelveHoursAgo),
-        supabase.from('messages').select('id', { count: 'exact', head: true }).in('scan_id', scanIds).eq('sender_type', 'scanner').gte('created_at', tenHoursAgo),
-      ]);
-
-      setHasAlertDot((alertCount || 0) > 0);
-      setHasMessageDot((messageCount || 0) > 0);
+      if (currentTab === "alerts") {
+        await supabase.from('alerts').update({ status: 'reviewed' }).in('scan_id', scanIds).eq('status', 'pending');
+        fetchNotifications();
+      } else if (currentTab === "messages") {
+        await supabase.from('messages').update({ is_read: true }).in('scan_id', scanIds).eq('sender_type', 'scanner').eq('is_read', false);
+        fetchNotifications();
+      }
     };
 
-    fetchNotifications();
-  }, []);
+    markAsRead();
+  }, [currentTab, fetchNotifications, supabase]);
+
+  // Realtime subscription
+  useEffect(() => {
+    const setupSubscription = async () => {
+      const { data: { session } } = await supabase.auth.getSession();
+      if (!session) return;
+
+      const channel = supabase
+        .channel('dashboard-notifications')
+        .on('postgres_changes', { event: '*', schema: 'public', table: 'alerts' }, () => fetchNotifications())
+        .on('postgres_changes', { event: '*', schema: 'public', table: 'messages' }, () => fetchNotifications())
+        .subscribe();
+
+      subscriptionRef.current = channel;
+    };
+
+    setupSubscription();
+    return () => {
+      if (subscriptionRef.current) {
+        supabase.removeChannel(subscriptionRef.current);
+      }
+    };
+  }, [fetchNotifications, supabase]);
 
   const handleLogout = async () => {
     const supabase = createClient();

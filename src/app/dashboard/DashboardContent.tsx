@@ -103,7 +103,7 @@ export default function DashboardContent({ tab }: DashboardContentProps) {
   const [autoVerifyEnabled] = useState(true);
   const [totalScans, setTotalScans] = useState(0);
   const [alertsReceived, setAlertsReceived] = useState(0);
-  const [callsReceived, setCallsReceived] = useState(0);
+  const [messagesReceived, setMessagesReceived] = useState(0);
   const [alerts, setAlerts] = useState<AlertRecord[]>([]);
   const [respondingTo, setRespondingTo] = useState<string | null>(null);
   const [showEtaPicker, setShowEtaPicker] = useState(false);
@@ -171,8 +171,26 @@ export default function DashboardContent({ tab }: DashboardContentProps) {
             const { data: alertsData } = await supabase.from('alerts').select('*').in('scan_id', scanIds).order('created_at', { ascending: false });
             setAlertsReceived(alertsData?.length || 0);
 
-            const { data: callsData } = await supabase.from('calls').select('id').in('scan_id', scanIds);
-            setCallsReceived(callsData?.length || 0);
+            // Fetch messages for all scan IDs
+            const { data: messagesData } = await supabase.from('messages').select('*').in('scan_id', scanIds).order('created_at', { ascending: false });
+            if (messagesData) {
+              const scannerMessagesCount = messagesData.filter((m: Message) => m.sender_type === 'scanner').length;
+              setMessagesReceived(scannerMessagesCount);
+
+              const enrichedMessages = messagesData.map((msg: Message) => {
+                const scan = scans.find((s: { id: string }) => s.id === msg.scan_id) as ScanLog | undefined;
+                const qr = qrCodes.find((q: { id: string }) => q.id === scan?.qr_id) as QRCode | undefined;
+                const veh = vehiclesData.find((v: Vehicle) => v.id === qr?.vehicle_id);
+                return {
+                  ...msg,
+                  vehicle_make: veh?.make,
+                  vehicle_model: veh?.model,
+                  scanner_name: scan?.scanner_name,
+                  scan_created_at: scan?.scanned_at as string | undefined,
+                };
+              });
+              setMessages(enrichedMessages);
+            }
 
             if (alertsData) {
               const enriched = alertsData.map((a: AlertRecord) => {
@@ -208,23 +226,6 @@ export default function DashboardContent({ tab }: DashboardContentProps) {
             setScanHistory(enrichedScanHistory);
             setLatestScans(enrichedScanHistory.slice(0, 3));
 
-            // Fetch messages for all scan IDs
-            const { data: messagesData } = await supabase.from('messages').select('*').in('scan_id', scanIds).order('created_at', { ascending: false });
-            if (messagesData) {
-              const enrichedMessages = messagesData.map((msg: Message) => {
-                const scan = scans.find((s: { id: string }) => s.id === msg.scan_id) as ScanLog | undefined;
-                const qr = qrCodes.find((q: { id: string }) => q.id === scan?.qr_id) as QRCode | undefined;
-                const veh = vehiclesData.find((v: Vehicle) => v.id === qr?.vehicle_id);
-                return {
-                  ...msg,
-                  vehicle_make: veh?.make,
-                  vehicle_model: veh?.model,
-                  scanner_name: scan?.scanner_name,
-                  scan_created_at: scan?.scanned_at as string | undefined,
-                };
-              });
-              setMessages(enrichedMessages);
-            }
           }
         }
       }
@@ -426,7 +427,7 @@ export default function DashboardContent({ tab }: DashboardContentProps) {
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
         {[
           { label: "Total Scans", value: totalScans },
-          { label: "Calls Received", value: callsReceived },
+          { label: "Messages Received", value: messagesReceived },
           { label: "Alerts Received", value: alertsReceived },
           { label: "Cars Registered", value: vehicles.length },
         ].map((stat, i) => (
@@ -821,7 +822,7 @@ export default function DashboardContent({ tab }: DashboardContentProps) {
                       </div>
                     </div>
                   ) : (
-                    <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                    <div className="grid grid-cols-2 gap-3">
                       <Button
                         className="bg-green-600 hover:bg-green-700 text-white h-12"
                         onClick={() => { setShowEtaPicker(true); setEtaAlertId(alert.id); }}
@@ -837,13 +838,6 @@ export default function DashboardContent({ tab }: DashboardContentProps) {
                       >
                         Sorry, I&apos;m Busy 😔
                       </Button>
-                      <Link href={`/chat/${alert.scan_id}?role=owner`}>
-                        <Button
-                          className="bg-secondary hover:bg-secondary-hover text-white h-12 w-full"
-                        >
-                          <MessageCircle className="w-4 h-4 mr-1" /> Chat 💬
-                        </Button>
-                      </Link>
                     </div>
                   )}
                 </CardContent>
