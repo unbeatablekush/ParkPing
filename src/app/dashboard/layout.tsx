@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, useCallback, useRef } from "react";
+import { useState, useEffect, useCallback, useRef, Suspense } from "react";
 import Link from "next/link";
 import { useSearchParams } from "next/navigation";
 import { LayoutDashboard, CarFront, History, Settings, Menu, X, LogOut, BellRing, MessageCircle } from "lucide-react";
@@ -48,10 +48,43 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
     return () => unsubscribe();
   }, []);
 
-  const searchParams = useSearchParams();
-  const currentTab = searchParams.get("tab") || "overview";
   const supabase = createClient();
   const subscriptionRef = useRef<ReturnType<typeof supabase.channel> | null>(null);
+
+  // Helper component to handle search params logic within a Suspense boundary
+  const DashboardSync = () => {
+    const searchParams = useSearchParams();
+    const currentTab = searchParams.get("tab") || "overview";
+
+    useEffect(() => {
+      const markAsRead = async () => {
+        const { data: { session } } = await supabase.auth.getSession();
+        if (!session) return;
+
+        const { data: vehicles } = await supabase.from('vehicles').select('id').eq('user_id', session.user.id);
+        if (!vehicles || vehicles.length === 0) return;
+        const vehicleIds = vehicles.map((v: { id: string }) => v.id);
+        const { data: qrCodes } = await supabase.from('qr_codes').select('id').in('vehicle_id', vehicleIds);
+        if (!qrCodes || qrCodes.length === 0) return;
+        const qrIds = qrCodes.map((q: { id: string }) => q.id);
+        const { data: scanLogs } = await supabase.from('scan_logs').select('id').in('qr_id', qrIds);
+        if (!scanLogs || scanLogs.length === 0) return;
+        const scanIds = scanLogs.map((s: { id: string }) => s.id);
+
+        if (currentTab === "alerts") {
+          await supabase.from('alerts').update({ status: 'reviewed' }).in('scan_id', scanIds).eq('status', 'pending');
+          fetchNotifications();
+        } else if (currentTab === "messages") {
+          await supabase.from('messages').update({ is_read: true }).in('scan_id', scanIds).eq('sender_type', 'scanner').eq('is_read', false);
+          fetchNotifications();
+        }
+      };
+
+      markAsRead();
+    }, [currentTab]);
+
+    return null;
+  };
 
   const fetchProfile = useCallback(async () => {
     const { data: { session } } = await supabase.auth.getSession();
@@ -98,34 +131,6 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
     fetchNotifications();
   }, [fetchNotifications]);
 
-  // Mark as read when tab is opened
-  useEffect(() => {
-    const markAsRead = async () => {
-      const { data: { session } } = await supabase.auth.getSession();
-      if (!session) return;
-
-      const { data: vehicles } = await supabase.from('vehicles').select('id').eq('user_id', session.user.id);
-      if (!vehicles || vehicles.length === 0) return;
-      const vehicleIds = vehicles.map((v: { id: string }) => v.id);
-      const { data: qrCodes } = await supabase.from('qr_codes').select('id').in('vehicle_id', vehicleIds);
-      if (!qrCodes || qrCodes.length === 0) return;
-      const qrIds = qrCodes.map((q: { id: string }) => q.id);
-      const { data: scanLogs } = await supabase.from('scan_logs').select('id').in('qr_id', qrIds);
-      if (!scanLogs || scanLogs.length === 0) return;
-      const scanIds = scanLogs.map((s: { id: string }) => s.id);
-
-      if (currentTab === "alerts") {
-        await supabase.from('alerts').update({ status: 'reviewed' }).in('scan_id', scanIds).eq('status', 'pending');
-        fetchNotifications();
-      } else if (currentTab === "messages") {
-        await supabase.from('messages').update({ is_read: true }).in('scan_id', scanIds).eq('sender_type', 'scanner').eq('is_read', false);
-        fetchNotifications();
-      }
-    };
-
-    markAsRead();
-  }, [currentTab, fetchNotifications, supabase]);
-
   // Realtime subscription
   useEffect(() => {
     const setupSubscription = async () => {
@@ -161,6 +166,9 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
 
   return (
     <div className="min-h-screen bg-gray-50 flex">
+      <Suspense fallback={null}>
+        <DashboardSync />
+      </Suspense>
       {/* Mobile sidebar overlay */}
       <AnimatePresence>
         {sidebarOpen && (
