@@ -151,25 +151,29 @@ export async function POST(
       );
     }
 
-    const { data: alert, error: alertError } = await supabase
-      .from("alerts")
-      .insert({
-        scan_id: scanLog.id,
-        alert_type: "standard",
-        status: "pending",
-      })
-      .select("id")
-      .single();
-
-    if (alertError || !alert) {
-      console.error("alerts create error:", alertError, "body:", payload);
-      return NextResponse.json(
-        {
-          error: "Failed to create alert",
-          details: alertError?.message || JSON.stringify(alertError) || "unknown",
-        },
-        { status: 500 }
-      );
+    let alertId = null;
+    if (normalizedContactMethod === "alert") {
+      const { data: alert, error: alertError } = await supabase
+        .from("alerts")
+        .insert({
+          scan_id: scanLog.id,
+          alert_type: "standard",
+          status: "pending",
+        })
+        .select("id")
+        .single();
+  
+      if (alertError || !alert) {
+        console.error("alerts create error:", alertError, "body:", payload);
+        return NextResponse.json(
+          {
+            error: "Failed to create alert",
+            details: alertError?.message || JSON.stringify(alertError) || "unknown",
+          },
+          { status: 500 }
+        );
+      }
+      alertId = alert.id;
     }
 
     const { data: ownerProfile, error: ownerProfileError } = await supabase
@@ -183,7 +187,7 @@ export async function POST(
       // still continue without FCM
     }
 
-    if (ownerProfile?.fcm_token) {
+    if (normalizedContactMethod === "alert" && ownerProfile?.fcm_token) {
       try {
         const { fcmAdmin } = await import("@/lib/firebase-admin");
         await fcmAdmin.send({
@@ -194,7 +198,7 @@ export async function POST(
           },
           data: {
             scan_id: scanLog.id,
-            alert_id: alert.id,
+            alert_id: alertId || "",
             type: "parking_alert",
             url: "/dashboard?tab=alerts",
           },
@@ -213,7 +217,7 @@ export async function POST(
     const cooldownEnds = new Date(Date.now() + 4 * 60 * 1000).toISOString();
 
     return NextResponse.json({
-      alertId: alert.id,
+      alertId: alertId,
       scanId: scanLog.id,
       cooldownEnds,
     });
