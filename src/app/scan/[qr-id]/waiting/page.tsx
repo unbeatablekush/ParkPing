@@ -14,10 +14,11 @@ export default function WaitingPage({ params }: { params: { "qr-id": string } })
   const scanId = searchParams.get("scanId");
   const qrString = params["qr-id"];
 
-  const [status, setStatus] = useState<"waiting" | "coming" | "busy" | "expired">("waiting");
+  const [status, setStatus] = useState<"waiting" | "coming" | "busy" | "expired" | "no_response_timeout">("waiting");
   const [eta, setEta] = useState<number | null>(null);
   const [busyReason, setBusyReason] = useState<string | null>(null);
   const [minutesAgo, setMinutesAgo] = useState(0);
+  const [secondsWaited, setSecondsWaited] = useState(0);
   const [startTime] = useState(Date.now());
 
   // Timer for "Sent X minutes ago"
@@ -27,6 +28,20 @@ export default function WaitingPage({ params }: { params: { "qr-id": string } })
     }, 10000);
     return () => clearInterval(interval);
   }, [startTime]);
+
+  // 30-second timeout for showing chat button
+  useEffect(() => {
+    const interval = setInterval(() => {
+      setSecondsWaited((s) => {
+        const newSeconds = s + 1;
+        if (newSeconds === 30 && status === "waiting") {
+          setStatus("no_response_timeout");
+        }
+        return newSeconds;
+      });
+    }, 1000);
+    return () => clearInterval(interval);
+  }, [status]);
 
   // 10-minute timeout
   useEffect(() => {
@@ -174,6 +189,31 @@ export default function WaitingPage({ params }: { params: { "qr-id": string } })
                   onClick={() => router.push(`/chat/${scanId}?role=scanner`)}
                 >
                   <MessageCircle className="mr-2 w-5 h-5" /> Leave a Message
+                </Button>
+              </div>
+            </div>
+          )}
+
+          {status === "no_response_timeout" && (
+            <div className="animate-in fade-in flex flex-col items-center">
+              <div className="w-20 h-20 bg-blue-100 rounded-full flex items-center justify-center mb-6">
+                <MessageCircle className="w-10 h-10 text-blue-500" />
+              </div>
+              <h2 className="text-2xl font-bold text-gray-900 mb-2">No response yet 🤔</h2>
+              <p className="text-gray-500 mb-8 max-w-xs">The owner hasn&apos;t responded in 30 seconds. Would you like to send them a direct message?</p>
+              <div className="space-y-3 w-full">
+                <Button
+                  className="w-full h-14 bg-blue-600 hover:bg-blue-700 text-white"
+                  onClick={() => router.push(`/chat/${scanId}?role=scanner`)}
+                >
+                  <MessageCircle className="mr-2 w-5 h-5" /> Chat with Owner 💬
+                </Button>
+                <Button
+                  variant="outline"
+                  className="w-full h-14"
+                  onClick={() => setStatus("waiting")}
+                >
+                  Keep Waiting
                 </Button>
               </div>
             </div>

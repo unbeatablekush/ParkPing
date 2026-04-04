@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useCallback } from "react";
 import Link from "next/link";
-import { LayoutDashboard, CarFront, History, Settings, Menu, X, LogOut, BellRing } from "lucide-react";
+import { LayoutDashboard, CarFront, History, Settings, Menu, X, LogOut, BellRing, MessageCircle } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
 import { createClient } from "@/lib/supabase/client";
 import { useFCMToken } from "@/hooks/useFCMToken";
@@ -12,6 +12,7 @@ const navItems = [
   { name: "Overview", href: "/dashboard", icon: LayoutDashboard },
   { name: "My Vehicles", href: "/dashboard?tab=vehicles", icon: CarFront },
   { name: "Alerts", href: "/dashboard?tab=alerts", icon: BellRing },
+  { name: "Messages", href: "/dashboard?tab=messages", icon: MessageCircle },
   { name: "Scan History", href: "/dashboard?tab=history", icon: History },
   { name: "Settings", href: "/dashboard?tab=settings", icon: Settings },
 ];

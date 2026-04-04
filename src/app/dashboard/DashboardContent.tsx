@@ -48,7 +48,11 @@ export default function DashboardContent({ tab }: DashboardContentProps) {
   const [showEtaPicker, setShowEtaPicker] = useState(false);
   const [etaAlertId, setEtaAlertId] = useState<string | null>(null);
   
-  // Settings Form State
+  const [messages, setMessages] = useState<Array<{id: string; scan_id: string; sender_type: "scanner" | "owner"; content: string; is_read: boolean; created_at: string; vehicle_make?: string; vehicle_model?: string; scanner_name?: string}>>([]);
+  const [selectedConversation, setSelectedConversation] = useState<string | null>(null);
+  const [messageInput, setMessageInput] = useState("");
+  const [sendingMessage, setSendingMessage] = useState(false);
+  
   const [fullName, setFullName] = useState("");
   const [age, setAge] = useState("");
   const [gender, setGender] = useState("");
@@ -74,7 +78,7 @@ export default function DashboardContent({ tab }: DashboardContentProps) {
       if (vehiclesData) {
         setVehicles(vehiclesData);
 
-        // Fetch QR codes for all vehicles
+      
         const vehicleIds = vehiclesData.map((v: Vehicle) => v.id);
         if (vehicleIds.length > 0) {
           const { data: qrData } = await supabase
@@ -85,7 +89,7 @@ export default function DashboardContent({ tab }: DashboardContentProps) {
         }
       }
 
-      // Fetch alerts for user's vehicles
+      
       if (vehiclesData && vehiclesData.length > 0) {
         const vehicleIds = vehiclesData.map((v: Vehicle) => v.id);
         const { data: qrCodes } = await supabase.from('qr_codes').select('id, vehicle_id').in('vehicle_id', vehicleIds);
@@ -102,7 +106,7 @@ export default function DashboardContent({ tab }: DashboardContentProps) {
             setCallsReceived(callsData?.length || 0);
 
             if (alertsData) {
-              // Enrich alerts with vehicle info
+            
               const enriched = alertsData.map((a: { scan_id: string; [key: string]: unknown }) => {
                 const scan = scanLogs.find((s: { id: string }) => s.id === a.scan_id);
                 const qr = qrCodes.find((q: { id: string }) => q.id === scan?.qr_id);
@@ -110,6 +114,18 @@ export default function DashboardContent({ tab }: DashboardContentProps) {
                 return { ...a, vehicle_make: veh?.make, vehicle_model: veh?.model };
               });
               setAlerts(enriched);
+            }
+
+            // Fetch messages for all scan IDs
+            const { data: messagesData } = await supabase.from('messages').select('*').in('scan_id', scanIds).order('created_at', { ascending: false });
+            if (messagesData) {
+              const enrichedMessages = messagesData.map((msg: any) => {
+                const scan = scanLogs.find((s: { id: string }) => s.id === msg.scan_id);
+                const qr = qrCodes.find((q: { id: string }) => q.id === scan?.qr_id);
+                const veh = vehiclesData.find((v: Vehicle) => v.id === qr?.vehicle_id);
+                return { ...msg, vehicle_make: veh?.make, vehicle_model: veh?.model, scanner_name: scan?.scanner_name };
+              });
+              setMessages(enrichedMessages);
             }
           }
         }
@@ -120,6 +136,80 @@ export default function DashboardContent({ tab }: DashboardContentProps) {
   useEffect(() => {
     fetchData();
   }, [fetchData]);
+
+  // Real-time subscription for messages
+  useEffect(() => {
+    const supabase = createClient();
+    const channel = supabase
+      .channel("messages-updates")
+      .on(
+        "postgres_changes",
+        {
+          event: "INSERT",
+          schema: "public",
+          table: "messages",
+        },
+        (payload: { new: Record<string, unknown> }) => {
+          const newMsg = payload.new as any;
+          // Fetch associated data for the new message
+          const enrichData = async () => {
+            const { data: scan } = await supabase.from('scan_logs').select('*').eq('id', newMsg.scan_id).single();
+            if (scan) {
+              const { data: qr } = await supabase.from('qr_codes').select('*').eq('id', scan.qr_id).single();
+              if (qr) {
+                const { data: veh } = await supabase.from('vehicles').select('*').eq('id', qr.vehicle_id).single();
+                if (veh) {
+                  setMessages((prev) => {
+                    if (prev.some((m) => m.id === newMsg.id)) return prev;
+                    return [{
+                      ...newMsg,
+                      vehicle_make: veh.make,
+                      vehicle_model: veh.model,
+                      scanner_name: scan.scanner_name,
+                    }, ...prev];
+                  });
+                }
+              }
+            }
+          };
+          enrichData();
+        }
+      )
+      .subscribe();
+
+    return () => {
+      supabase.removeChannel(channel);
+    };
+  }, []);
+
+  // Real-time subscription for conversation updates
+  useEffect(() => {
+    if (!selectedConversation) return;
+    const supabase = createClient();
+    const channel = supabase
+      .channel(`conversation-${selectedConversation}`)
+      .on(
+        "postgres_changes",
+        {
+          event: "INSERT",
+          schema: "public",
+          table: "messages",
+          filter: `scan_id=eq.${selectedConversation}`,
+        },
+        (payload: { new: Record<string, unknown> }) => {
+          const newMsg = payload.new as any;
+          setMessages((prev) => {
+            if (prev.some((m) => m.id === newMsg.id)) return prev;
+            return [newMsg, ...prev];
+          });
+        }
+      )
+      .subscribe();
+
+    return () => {
+      supabase.removeChannel(channel);
+    };
+  }, [selectedConversation]);
 
   const handleDeleteVehicle = async (vehicleId: string) => {
     const confirmDelete = window.confirm("Delete this vehicle and all related data? This cannot be undone.");
@@ -678,9 +768,189 @@ export default function DashboardContent({ tab }: DashboardContentProps) {
     );
   };
 
+  const sendMessageToScanner = async (scanId: string, content: string) => {
+    if (!content.trim() || sendingMessage) return;
+    setSendingMessage(true);
+
+    try {
+      const res = await fetch("/api/messages/send", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ scanId, content: content.trim(), senderType: "owner" }),
+      });
+
+      if (!res.ok) {
+        const data = await res.json();
+        toast(data.error || "Failed to send message", "error");
+        setSendingMessage(false);
+        return;
+      }
+
+      setMessageInput("");
+      toast("Message sent!", "success");
+    } catch (err) {
+      console.error("Send failed:", err);
+      toast("Failed to send message", "error");
+    } finally {
+      setSendingMessage(false);
+    }
+  };
+
+  const renderMessages = () => {
+    // Group messages by scan_id to show conversations
+    const conversations = messages.reduce((acc: Record<string, any[]>, msg) => {
+      const scanId = msg.scan_id;
+      if (!acc[scanId]) acc[scanId] = [];
+      acc[scanId].push(msg);
+      return acc;
+    }, {});
+
+    const conversationList = Object.entries(conversations).map(([scanId, msgs]: [string, any[]]) => {
+      const latestMsg = msgs[0]; // Already sorted by created_at desc
+      return {
+        scanId,
+        vehicle: `${latestMsg.vehicle_make} ${latestMsg.vehicle_model}`,
+        scanner: latestMsg.scanner_name || "Unknown",
+        lastMessage: latestMsg.content,
+        lastTime: latestMsg.created_at,
+        messageCount: msgs.length,
+        unreadCount: msgs.filter((m: any) => !m.is_read && m.sender_type === "scanner").length,
+      };
+    });
+
+    return (
+      <div className="space-y-6 animate-in fade-in duration-500">
+        <div>
+          <h1 className="text-3xl font-bold text-secondary mb-2">Messages</h1>
+          <p className="text-gray-500">Chat with scanners about their parking alerts.</p>
+        </div>
+
+        {selectedConversation ? (
+          // Conversation View
+          <div className="space-y-4">
+            <button
+              onClick={() => setSelectedConversation(null)}
+              className="text-primary hover:text-primary-hover font-semibold text-sm"
+            >
+              ← Back to Messages
+            </button>
+
+            <Card className="flex flex-col h-96">
+              <CardHeader className="border-b border-gray-100 pb-4">
+                {conversationList.find(c => c.scanId === selectedConversation) && (
+                  <div>
+                    <CardTitle className="mb-1">
+                      {conversationList.find(c => c.scanId === selectedConversation)?.vehicle}
+                    </CardTitle>
+                    <p className="text-sm text-gray-500">
+                      Chatting with: {conversationList.find(c => c.scanId === selectedConversation)?.scanner}
+                    </p>
+                  </div>
+                )}
+              </CardHeader>
+
+              {/* Messages Area */}
+              <CardContent className="flex-1 overflow-y-auto p-4 space-y-4 bg-gray-50">
+                {messages
+                  .filter((msg) => msg.scan_id === selectedConversation)
+                  .sort((a, b) => new Date(a.created_at).getTime() - new Date(b.created_at).getTime())
+                  .map((msg) => (
+                    <div
+                      key={msg.id}
+                      className={`flex ${msg.sender_type === "owner" ? "justify-end" : "justify-start"}`}
+                    >
+                      <div
+                        className={`max-w-xs px-4 py-2 rounded-lg ${
+                          msg.sender_type === "owner"
+                            ? "bg-primary text-white rounded-br-none"
+                            : "bg-gray-200 text-gray-900 rounded-bl-none"
+                        }`}
+                      >
+                        <p className="break-words text-sm">{msg.content}</p>
+                        <p className={`text-xs mt-1 ${msg.sender_type === "owner" ? "text-white/70" : "text-gray-600"}`}>
+                          {new Date(msg.created_at).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}
+                        </p>
+                      </div>
+                    </div>
+                  ))}
+              </CardContent>
+
+              {/* Input Area */}
+              <div className="border-t border-gray-100 p-4 bg-white rounded-b-2xl">
+                <form
+                  onSubmit={(e) => {
+                    e.preventDefault();
+                    sendMessageToScanner(selectedConversation, messageInput);
+                  }}
+                  className="flex gap-3"
+                >
+                  <input
+                    type="text"
+                    value={messageInput}
+                    onChange={(e) => setMessageInput(e.target.value)}
+                    placeholder="Type a message..."
+                    className="flex-1 px-4 py-2 border border-gray-200 rounded-lg outline-none focus:ring-2 focus:ring-primary focus:border-primary"
+                    disabled={sendingMessage}
+                  />
+                  <Button
+                    type="submit"
+                    disabled={sendingMessage || !messageInput.trim()}
+                    isLoading={sendingMessage}
+                  >
+                    Send
+                  </Button>
+                </form>
+              </div>
+            </Card>
+          </div>
+        ) : (
+          // Conversation List View
+          <div className="space-y-3">
+            {conversationList.length === 0 ? (
+              <Card>
+                <div className="p-8 text-center text-gray-500">
+                  No messages yet. When scanners send you messages, they will appear here.
+                </div>
+              </Card>
+            ) : (
+              conversationList.map((conv) => (
+                <Card
+                  key={conv.scanId}
+                  className="cursor-pointer hover:shadow-md transition-shadow"
+                  onClick={() => setSelectedConversation(conv.scanId)}
+                >
+                  <CardContent className="p-4">
+                    <div className="flex items-start justify-between">
+                      <div className="flex-1 min-w-0">
+                        <h4 className="font-semibold text-gray-900">{conv.vehicle}</h4>
+                        <p className="text-sm text-gray-500 mb-2">
+                          Scanner: <span className="font-medium">{conv.scanner}</span>
+                        </p>
+                        <p className="text-sm text-gray-600 truncate">{conv.lastMessage}</p>
+                        <p className="text-xs text-gray-400 mt-1">
+                          {new Date(conv.lastTime).toLocaleDateString()} • {new Date(conv.lastTime).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}
+                        </p>
+                      </div>
+                      {conv.unreadCount > 0 && (
+                        <span className="ml-4 inline-flex items-center justify-center h-6 w-6 rounded-full bg-red-500 text-white text-xs font-bold">
+                          {conv.unreadCount}
+                        </span>
+                      )}
+                    </div>
+                  </CardContent>
+                </Card>
+              ))
+            )}
+          </div>
+        )}
+      </div>
+    );
+  };
+
   switch (currentTab) {
     case "vehicles": return renderVehicles();
     case "alerts": return renderAlerts();
+    case "messages": return renderMessages();
     case "history": return renderHistory();
     case "settings": return renderSettings();
     case "overview":
