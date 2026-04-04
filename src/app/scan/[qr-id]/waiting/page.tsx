@@ -18,7 +18,6 @@ export default function WaitingPage({ params }: { params: { "qr-id": string } })
   const [eta, setEta] = useState<number | null>(null);
   const [busyReason, setBusyReason] = useState<string | null>(null);
   const [minutesAgo, setMinutesAgo] = useState(0);
-  const [secondsWaited, setSecondsWaited] = useState(0);
   const [startTime] = useState(Date.now());
 
   // Timer for "Sent X minutes ago"
@@ -31,14 +30,13 @@ export default function WaitingPage({ params }: { params: { "qr-id": string } })
 
   // 30-second timeout for showing chat button
   useEffect(() => {
+    let secondsWaited = 0;
     const interval = setInterval(() => {
-      setSecondsWaited((s) => {
-        const newSeconds = s + 1;
-        if (newSeconds === 30 && status === "waiting") {
-          setStatus("no_response_timeout");
-        }
-        return newSeconds;
-      });
+      secondsWaited += 1;
+      if (secondsWaited === 30 && status === "waiting") {
+        setStatus("no_response_timeout");
+        clearInterval(interval);
+      }
     }, 1000);
     return () => clearInterval(interval);
   }, [status]);

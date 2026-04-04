@@ -31,6 +31,38 @@ interface QRCodeData {
   delivery_status?: string;
 }
 
+interface Message {
+  id: string;
+  scan_id: string;
+  sender_type: "scanner" | "owner";
+  content: string;
+  is_read: boolean;
+  created_at: string;
+  vehicle_make?: string;
+  vehicle_model?: string;
+  scanner_name?: string;
+}
+
+interface ScanLog {
+  id: string;
+  qr_id: string;
+  scanner_name?: string;
+  [key: string]: unknown;
+}
+
+interface QRCode {
+  id: string;
+  vehicle_id: string;
+  [key: string]: unknown;
+}
+
+interface VehicleData {
+  id: string;
+  make: string;
+  model: string;
+  [key: string]: unknown;
+}
+
 export default function DashboardContent({ tab }: DashboardContentProps) {
   const currentTab = Array.isArray(tab) ? tab[0] : tab;
   const [profile, setProfile] = useState<{ full_name?: string; phone?: string; age?: number; gender?: string; date_of_birth?: string; } | null>(null);
@@ -119,9 +151,9 @@ export default function DashboardContent({ tab }: DashboardContentProps) {
             // Fetch messages for all scan IDs
             const { data: messagesData } = await supabase.from('messages').select('*').in('scan_id', scanIds).order('created_at', { ascending: false });
             if (messagesData) {
-              const enrichedMessages = messagesData.map((msg: any) => {
-                const scan = scanLogs.find((s: { id: string }) => s.id === msg.scan_id);
-                const qr = qrCodes.find((q: { id: string }) => q.id === scan?.qr_id);
+              const enrichedMessages = messagesData.map((msg: Message) => {
+                const scan = scanLogs.find((s: { id: string }) => s.id === msg.scan_id) as ScanLog | undefined;
+                const qr = qrCodes.find((q: { id: string }) => q.id === scan?.qr_id) as QRCode | undefined;
                 const veh = vehiclesData.find((v: Vehicle) => v.id === qr?.vehicle_id);
                 return { ...msg, vehicle_make: veh?.make, vehicle_model: veh?.model, scanner_name: scan?.scanner_name };
               });
@@ -150,14 +182,14 @@ export default function DashboardContent({ tab }: DashboardContentProps) {
           table: "messages",
         },
         (payload: { new: Record<string, unknown> }) => {
-          const newMsg = payload.new as any;
+          const newMsg = payload.new as unknown as Message;
           // Fetch associated data for the new message
           const enrichData = async () => {
-            const { data: scan } = await supabase.from('scan_logs').select('*').eq('id', newMsg.scan_id).single();
+            const { data: scan } = await supabase.from('scan_logs').select('*').eq('id', newMsg.scan_id).single() as { data: ScanLog | null };
             if (scan) {
-              const { data: qr } = await supabase.from('qr_codes').select('*').eq('id', scan.qr_id).single();
+              const { data: qr } = await supabase.from('qr_codes').select('*').eq('id', scan.qr_id).single() as { data: QRCode | null };
               if (qr) {
-                const { data: veh } = await supabase.from('vehicles').select('*').eq('id', qr.vehicle_id).single();
+                const { data: veh } = await supabase.from('vehicles').select('*').eq('id', qr.vehicle_id).single() as { data: VehicleData | null };
                 if (veh) {
                   setMessages((prev) => {
                     if (prev.some((m) => m.id === newMsg.id)) return prev;
@@ -197,7 +229,7 @@ export default function DashboardContent({ tab }: DashboardContentProps) {
           filter: `scan_id=eq.${selectedConversation}`,
         },
         (payload: { new: Record<string, unknown> }) => {
-          const newMsg = payload.new as any;
+          const newMsg = payload.new as unknown as Message;
           setMessages((prev) => {
             if (prev.some((m) => m.id === newMsg.id)) return prev;
             return [newMsg, ...prev];
@@ -798,14 +830,14 @@ export default function DashboardContent({ tab }: DashboardContentProps) {
 
   const renderMessages = () => {
     // Group messages by scan_id to show conversations
-    const conversations = messages.reduce((acc: Record<string, any[]>, msg) => {
+    const conversations = messages.reduce((acc: Record<string, Message[]>, msg: Message) => {
       const scanId = msg.scan_id;
       if (!acc[scanId]) acc[scanId] = [];
       acc[scanId].push(msg);
       return acc;
     }, {});
 
-    const conversationList = Object.entries(conversations).map(([scanId, msgs]: [string, any[]]) => {
+    const conversationList = Object.entries(conversations).map(([scanId, msgs]: [string, Message[]]) => {
       const latestMsg = msgs[0]; // Already sorted by created_at desc
       return {
         scanId,
@@ -814,7 +846,7 @@ export default function DashboardContent({ tab }: DashboardContentProps) {
         lastMessage: latestMsg.content,
         lastTime: latestMsg.created_at,
         messageCount: msgs.length,
-        unreadCount: msgs.filter((m: any) => !m.is_read && m.sender_type === "scanner").length,
+        unreadCount: msgs.filter((m: Message) => !m.is_read && m.sender_type === "scanner").length,
       };
     });
 
