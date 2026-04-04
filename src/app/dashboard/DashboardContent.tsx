@@ -230,7 +230,7 @@ export default function DashboardContent({ tab }: DashboardContentProps) {
         }
       }
     }
-  }, [profile]);
+  }, []);
 
   useEffect(() => {
     fetchData();
@@ -308,6 +308,30 @@ export default function DashboardContent({ tab }: DashboardContentProps) {
     return () => {
       supabase.removeChannel(channel);
     };
+  }, [selectedConversation]);
+
+  useEffect(() => {
+    if (!selectedConversation) return;
+
+    const markAsRead = async () => {
+      const supabase = createClient();
+      await supabase
+        .from('messages')
+        .update({ is_read: true })
+        .eq('scan_id', selectedConversation)
+        .eq('sender_type', 'scanner')
+        .eq('is_read', false);
+    };
+
+    markAsRead();
+
+    setMessages((prev) =>
+      prev.map((msg) =>
+        msg.scan_id === selectedConversation && msg.sender_type === "scanner" && !msg.is_read
+          ? { ...msg, is_read: true }
+          : msg
+      )
+    );
   }, [selectedConversation]);
 
   const handleDeleteVehicle = async (vehicleId: string) => {

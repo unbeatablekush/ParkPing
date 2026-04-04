@@ -57,6 +57,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
     const currentTab = searchParams.get("tab") || "overview";
 
     useEffect(() => {
+
       const markAsRead = async () => {
         const { data: { session } } = await supabase.auth.getSession();
         if (!session) return;
@@ -72,11 +73,17 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
         const scanIds = scanLogs.map((s: { id: string }) => s.id);
 
         if (currentTab === "alerts") {
-          await supabase.from('alerts').update({ status: 'reviewed' }).in('scan_id', scanIds).eq('status', 'pending');
-          fetchNotifications();
+          const { error } = await supabase.from('alerts').update({ status: 'reviewed' }).in('scan_id', scanIds).eq('status', 'pending');
+          if (!error) {
+            setHasAlertDot(false);
+            fetchNotifications();
+          }
         } else if (currentTab === "messages") {
-          await supabase.from('messages').update({ is_read: true }).in('scan_id', scanIds).eq('sender_type', 'scanner').eq('is_read', false);
-          fetchNotifications();
+          const { error } = await supabase.from('messages').update({ is_read: true }).in('scan_id', scanIds).eq('sender_type', 'scanner').eq('is_read', false);
+          if (!error) {
+            setHasMessageDot(false);
+            fetchNotifications();
+          }
         }
       };
 
