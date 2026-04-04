@@ -23,6 +23,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
   const [profile, setProfile] = useState<{ full_name?: string; phone?: string; email?: string } | null>(null);
   const [hasAlertDot, setHasAlertDot] = useState(false);
   const [hasMessageDot, setHasMessageDot] = useState(false);
+  const currentTabRef = useRef("overview");
 
   // Initialize FCM on dashboard mount
   useFCMToken();
@@ -57,11 +58,18 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
     const currentTab = searchParams.get("tab") || "overview";
 
     useEffect(() => {
+      currentTabRef.current = currentTab;
+      
+      if (currentTab === "messages") {
+        setHasMessageDot(false);
+      } else if (currentTab === "alerts") {
+        setHasAlertDot(false);
+      }
 
       const markAsRead = async () => {
         const { data: { session } } = await supabase.auth.getSession();
         if (!session) return;
-
+        
         const { data: vehicles } = await supabase.from('vehicles').select('id').eq('user_id', session.user.id);
         if (!vehicles || vehicles.length === 0) return;
         const vehicleIds = vehicles.map((v: { id: string }) => v.id);
@@ -73,18 +81,13 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
         const scanIds = scanLogs.map((s: { id: string }) => s.id);
 
         if (currentTab === "alerts") {
-          const { error } = await supabase.from('alerts').update({ status: 'reviewed' }).in('scan_id', scanIds).eq('status', 'pending');
-          if (!error) {
-            setHasAlertDot(false);
-            fetchNotifications();
-          }
+          await supabase.from('alerts').update({ status: 'reviewed' }).in('scan_id', scanIds).eq('status', 'pending');
         } else if (currentTab === "messages") {
-          const { error } = await supabase.from('messages').update({ is_read: true }).in('scan_id', scanIds).eq('sender_type', 'scanner').eq('is_read', false);
-          if (!error) {
-            setHasMessageDot(false);
-            fetchNotifications();
-          }
+          await supabase.from('messages').update({ is_read: true }).in('scan_id', scanIds).eq('sender_type', 'scanner').eq('is_read', false);
         }
+        
+        // Final re-fetch to ensure sync, but the local force-false logic will prevent blinking
+        fetchNotifications();
       };
 
       markAsRead();
@@ -126,8 +129,12 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
       supabase.from('messages').select('id', { count: 'exact', head: true }).in('scan_id', scanIds).eq('sender_type', 'scanner').eq('is_read', false),
     ]);
 
-    setHasAlertDot((alertCount || 0) > 0);
-    setHasMessageDot((messageCount || 0) > 0);
+    const hasNewAlerts = (alertCount || 0) > 0;
+    const hasNewMessages = (messageCount || 0) > 0;
+
+    // Only set dot to true if NOT currently on that tab
+    setHasAlertDot(hasNewAlerts && currentTabRef.current !== "alerts");
+    setHasMessageDot(hasNewMessages && currentTabRef.current !== "messages");
   }, [supabase]);
 
   useEffect(() => {
