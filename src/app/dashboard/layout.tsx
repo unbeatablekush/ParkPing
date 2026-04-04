@@ -8,6 +8,7 @@ import { motion, AnimatePresence } from "framer-motion";
 import { createClient } from "@/lib/supabase/client";
 import { useFCMToken } from "@/hooks/useFCMToken";
 import { messaging, onMessage } from "@/lib/firebase";
+import { markMessagesAsRead } from "@/app/actions/messages";
 
 const navItems = [
   { name: "Overview", href: "/dashboard", icon: LayoutDashboard },
@@ -83,8 +84,13 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
         if (currentTab === "alerts") {
           await supabase.from('alerts').update({ status: 'reviewed' }).in('scan_id', scanIds).eq('status', 'pending');
         } else if (currentTab === "messages") {
-          await supabase.from('messages').update({ is_read: true }).in('scan_id', scanIds).eq('sender_type', 'scanner').eq('is_read', false);
+          // Use Server Action to mark messages as read, bypassing RLS
+          await markMessagesAsRead(scanIds);
         }
+        
+        // Clear local dots instantly for UI response
+        if (currentTab === "alerts") setHasAlertDot(false);
+        if (currentTab === "messages") setHasMessageDot(false);
         
         // Final re-fetch to ensure sync, but the local force-false logic will prevent blinking
         fetchNotifications();

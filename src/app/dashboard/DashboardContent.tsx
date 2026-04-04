@@ -9,6 +9,7 @@ import Link from "next/link";
 import { createClient } from "@/lib/supabase/client";
 import { QRCodeSVG } from "qrcode.react";
 import { PARKPING_URL } from "@/lib/utils";
+import { markMessagesAsRead } from "@/app/actions/messages";
 
 interface DashboardContentProps {
   tab: string | string[];
@@ -313,17 +314,12 @@ export default function DashboardContent({ tab }: DashboardContentProps) {
   useEffect(() => {
     if (!selectedConversation) return;
 
-    const markAsRead = async () => {
-      const supabase = createClient();
-      await supabase
-        .from('messages')
-        .update({ is_read: true })
-        .eq('scan_id', selectedConversation)
-        .eq('sender_type', 'scanner')
-        .eq('is_read', false);
+    const markAsResolvedInDb = async () => {
+      // Use Server Action to mark messages as read, bypassing RLS
+      await markMessagesAsRead([selectedConversation]);
     };
-
-    markAsRead();
+ 
+    markAsResolvedInDb();
 
     setMessages((prev) =>
       prev.map((msg) =>
